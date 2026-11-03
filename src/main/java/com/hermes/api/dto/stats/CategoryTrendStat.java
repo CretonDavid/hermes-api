@@ -1,0 +1,10 @@
+package com.hermes.api.dto.stats;
+
+import java.math.BigDecimal;
+import java.time.YearMonth;
+
+public record CategoryTrendStat(
+        YearMonth month,
+        BigDecimal amount
+) {
+}
