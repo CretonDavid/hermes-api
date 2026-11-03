@@ -1,11 +1,10 @@
 package com.untitled.hermesapi.exception;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 
-@Getter
-@RequiredArgsConstructor
 public class ResourceNotFoundException extends ApplicationException {
 
-    private final String errorMessage;
+    public ResourceNotFoundException(String message) {
+        super(HttpStatus.NOT_FOUND, "NOT_FOUND", message);
+    }
 }

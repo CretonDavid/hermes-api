@@ -1,8 +1,8 @@
 package com.untitled.hermesapi.controller;
 
-import com.untitled.hermesapi.Service.AccountService;
-import com.untitled.hermesapi.dto.account.AccountRequest;
-import com.untitled.hermesapi.dto.account.AccountResponse;
+import com.untitled.hermesapi.dto.account.*;
+import com.untitled.hermesapi.service.AccountService;
+import com.untitled.hermesapi.service.ReconciliationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,20 +17,26 @@ import java.util.List;
 public class AccountController {
 
     private final AccountService accountService;
+    private final ReconciliationService reconciliationService;
 
-    @PostMapping("/create")
-    public ResponseEntity<AccountResponse> create(@Valid @RequestBody AccountRequest request) {
-        AccountResponse response = accountService.create(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    @GetMapping
+    public ResponseEntity<List<AccountResponse>> getAll() {
+        return ResponseEntity.ok(accountService.getAll());
     }
 
-    @PatchMapping("/{id}")
-    public ResponseEntity<AccountResponse> update(
-            @PathVariable Long id,
-            @Valid @RequestBody AccountRequest request) {
+    @GetMapping("/{id}")
+    public ResponseEntity<AccountResponse> getById(@PathVariable Long id) {
+        return ResponseEntity.ok(accountService.getById(id));
+    }
 
-        AccountResponse response = accountService.update(id, request);
-        return ResponseEntity.ok(response);
+    @PostMapping
+    public ResponseEntity<AccountResponse> create(@Valid @RequestBody AccountRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(accountService.create(request));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<AccountResponse> update(@PathVariable Long id, @Valid @RequestBody AccountRequest request) {
+        return ResponseEntity.ok(accountService.update(id, request));
     }
 
     @DeleteMapping("/{id}")
@@ -39,15 +45,26 @@ public class AccountController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<AccountResponse> getById(@PathVariable Long id) {
-        AccountResponse response = accountService.getById(id);
-        return ResponseEntity.ok(response);
+    // ---------- Rapprochement bancaire ----------
+
+    @GetMapping("/{id}/reconciliations")
+    public ResponseEntity<List<ReconciliationResponse>> getReconciliations(@PathVariable Long id) {
+        return ResponseEntity.ok(reconciliationService.findAll(id));
     }
 
-    @GetMapping
-    public ResponseEntity<List<AccountResponse>> getAll() {
-        List<AccountResponse> responses = accountService.getAll();
-        return ResponseEntity.ok(responses);
+    @GetMapping("/{id}/reconciliation-status")
+    public ResponseEntity<ReconciliationStatusResponse> getReconciliationStatus(@PathVariable Long id) {
+        return ResponseEntity.ok(reconciliationService.status(id));
+    }
+
+    @PostMapping("/{id}/reconciliations")
+    public ResponseEntity<ReconciliationResponse> reconcile(@PathVariable Long id, @Valid @RequestBody ReconciliationRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(reconciliationService.reconcile(id, request));
+    }
+
+    @DeleteMapping("/{id}/reconciliations/{reconciliationId}")
+    public ResponseEntity<Void> undoReconciliation(@PathVariable Long id, @PathVariable Long reconciliationId) {
+        reconciliationService.undoLast(id, reconciliationId);
+        return ResponseEntity.noContent().build();
     }
 }

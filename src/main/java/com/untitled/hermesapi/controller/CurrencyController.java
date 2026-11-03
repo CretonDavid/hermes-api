@@ -1,8 +1,8 @@
 package com.untitled.hermesapi.controller;
 
-import com.untitled.hermesapi.Service.CurrencyService;
 import com.untitled.hermesapi.dto.currency.CurrencyRequest;
 import com.untitled.hermesapi.dto.currency.CurrencyResponse;
+import com.untitled.hermesapi.service.CurrencyService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -13,7 +13,7 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/currency")
+@RequestMapping("/currencies")
 public class CurrencyController {
 
     private final CurrencyService currencyService;
@@ -28,7 +28,7 @@ public class CurrencyController {
         return ResponseEntity.status(HttpStatus.CREATED).body(currencyService.create(request));
     }
 
-    @PatchMapping("/{id}")
+    @PutMapping("/{id}")
     public ResponseEntity<CurrencyResponse> update(@PathVariable Long id, @Valid @RequestBody CurrencyRequest request) {
         return ResponseEntity.ok(currencyService.update(id, request));
     }

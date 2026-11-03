@@ -17,12 +17,21 @@ public class Currency {
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "currency_seq")
     private Long id;
 
-    @Column(name = "code")
+    @Column(name = "code", nullable = false, length = 3)
     private String code;
 
-    @Column(name = "symbol")
+    @Column(name = "symbol", nullable = false, length = 10)
     private String symbol;
 
-    @Column(name = "name")
+    @Column(name = "name", nullable = false)
     private String name;
+
+    // null pour les devises par défaut, partagées par tous les utilisateurs
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private User owner;
+
+    public boolean isCustom() {
+        return owner != null;
+    }
 }

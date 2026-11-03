@@ -1,6 +1,6 @@
 package com.untitled.hermesapi.utils;
 
-import com.untitled.hermesapi.Service.JwtService;
+import com.untitled.hermesapi.service.JwtService;
 import com.untitled.hermesapi.repository.UserRepository;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
@@ -47,15 +47,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             if (jwtService.isValid(token) && jwtService.isAccessToken(token)) {
-                UUID accountId = jwtService.extractAccountId(token);
-                userRepository.findById(accountId).ifPresent(account -> {
-                    var authentication = new UsernamePasswordAuthenticationToken(
-                            account, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
-                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                });
+                UUID userId = jwtService.extractUserId(token);
+                userRepository.findById(userId)
+                        .filter(user -> user.isEnabled())
+                        .ifPresent(user -> {
+                            var authentication = new UsernamePasswordAuthenticationToken(
+                                    user.getId(), null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
+                            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                            SecurityContextHolder.getContext().setAuthentication(authentication);
+                        });
             }
-        } catch (JwtException e) {
+        } catch (JwtException | IllegalArgumentException e) {
             log.debug("Rejected invalid JWT: {}", e.getMessage());
         }
 

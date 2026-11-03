@@ -4,6 +4,7 @@ public record CurrencyResponse(
         Long id,
         String code,
         String symbol,
-        String name
+        String name,
+        boolean custom
 ) {
 }

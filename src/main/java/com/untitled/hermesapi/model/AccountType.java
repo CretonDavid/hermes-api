@@ -1,13 +1,11 @@
 package com.untitled.hermesapi.model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
@@ -19,6 +17,14 @@ public class AccountType {
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "account_type_seq")
     private Long id;
 
-    @Column(name = "name")
+    @Column(name = "name", nullable = false)
     private String name;
+
+    // Les virements vers un compte de ce type sont comptés comme de l'épargne
+    @Column(name = "savings", nullable = false)
+    private boolean savings;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "owner_id", nullable = false)
+    private User owner;
 }

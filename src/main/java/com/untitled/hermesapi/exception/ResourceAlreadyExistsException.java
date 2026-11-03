@@ -1,11 +1,10 @@
 package com.untitled.hermesapi.exception;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 
-@Getter
-@RequiredArgsConstructor
 public class ResourceAlreadyExistsException extends ApplicationException {
 
-    private final String errorMessage;
+    public ResourceAlreadyExistsException(String message) {
+        super(HttpStatus.CONFLICT, "ALREADY_EXISTS", message);
+    }
 }

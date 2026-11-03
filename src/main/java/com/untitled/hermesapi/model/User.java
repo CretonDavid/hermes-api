@@ -13,25 +13,30 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "users")
-@SequenceGenerator(name = "users_seq", sequenceName = "users_seq", allocationSize = 10)
 public class User {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID, generator = "users_seq")
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false, unique = true, length = 100)
-    private String key;
+    // Les 6 premiers chiffres du numéro de compte, utilisés pour retrouver l'utilisateur
+    @Column(name = "lookup_key", nullable = false, unique = true, length = 6)
+    private String lookupKey;
 
-    @Column(nullable = false, unique = true, length = 100)
-    private String accountNumber;
+    // Hash Argon2 du numéro de compte complet
+    @Column(name = "account_number_hash", nullable = false)
+    private String accountNumberHash;
 
-    private boolean isEnabled = false;
+    @Column(name = "enabled", nullable = false)
+    private boolean enabled;
 
-    private boolean isAccountLocked = false;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reference_currency_id")
+    private Currency referenceCurrency;
 
-    @Column(nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    private LocalDateTime lastloginAt;
+    @Column(name = "last_login_at")
+    private LocalDateTime lastLoginAt;
 }
