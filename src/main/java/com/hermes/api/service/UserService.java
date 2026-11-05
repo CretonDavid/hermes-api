@@ -75,14 +75,14 @@ public class UserService {
     @Transactional(readOnly = true)
     public User authenticate(String accountNumber) {
         if (accountNumber == null || !ACCOUNT_NUMBER_PATTERN.matcher(accountNumber).matches()) {
-            throw new InvalidCredentialsException("Numéro de compte invalide");
+            throw new InvalidCredentialsException("Numéro d'accès invalide");
         }
 
         User user = userRepository.findByLookupKey(extractKey(accountNumber))
-                .orElseThrow(() -> new InvalidCredentialsException("Numéro de compte invalide"));
+                .orElseThrow(() -> new InvalidCredentialsException("Numéro d'accès invalide"));
 
         if (!passwordEncoder.matches(accountNumber, user.getAccountNumberHash())) {
-            throw new InvalidCredentialsException("Numéro de compte invalide");
+            throw new InvalidCredentialsException("Numéro d'accès invalide");
         }
         return user;
     }
@@ -126,7 +126,7 @@ public class UserService {
         UUID userId = currentUser.id();
         User verified = authenticate(accountNumber);
         if (!verified.getId().equals(userId)) {
-            throw new InvalidCredentialsException("Numéro de compte invalide");
+            throw new InvalidCredentialsException("Numéro d'accès invalide");
         }
 
         transactionRepository.unlinkAllByOwnerId(userId);
