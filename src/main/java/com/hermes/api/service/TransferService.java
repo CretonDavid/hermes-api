@@ -133,7 +133,7 @@ public class TransferService {
 
     private static void validate(Account from, Account to) {
         if (from.getId().equals(to.getId())) {
-            throw new BadRequestException("Les comptes débité et crédité doivent être différents");
+            throw new BadRequestException("Les comptes bancaires débité et crédité doivent être différents");
         }
         TransactionService.ensureOpen(from);
         TransactionService.ensureOpen(to);

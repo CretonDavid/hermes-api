@@ -139,7 +139,7 @@ public class TransactionService {
                     || transaction.getAmount().compareTo(request.amount()) != 0
                     || !transaction.getOperationDate().equals(request.operationDate());
             if (lockedFieldChanged) {
-                throw new BadRequestException("Le compte, le montant et la date d'une opération rapprochée ne peuvent pas être modifiés");
+                throw new BadRequestException("Le compte bancaire, le montant et la date d'une opération rapprochée ne peuvent pas être modifiés");
             }
         } else if (request.status() != null && request.status() != TransactionStatus.RECONCILED) {
             transaction.setStatus(request.status());
@@ -213,7 +213,7 @@ public class TransactionService {
 
     static void ensureOpen(Account account) {
         if (account.isClosed()) {
-            throw new BadRequestException("Le compte " + account.getName() + " est clôturé");
+            throw new BadRequestException("Le compte bancaire " + account.getName() + " est clôturé");
         }
     }
 

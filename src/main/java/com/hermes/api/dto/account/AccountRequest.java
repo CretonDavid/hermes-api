@@ -16,7 +16,7 @@ public record AccountRequest(
         String description,
         @Size(max = 100, message = "Le nom de la banque ne doit pas dépasser 100 caractères")
         String bankName,
-        @NotNull(message = "Le type de compte est obligatoire")
+        @NotNull(message = "Le type de compte bancaire est obligatoire")
         Long accountTypeId,
         @NotNull(message = "La devise est obligatoire")
         Long currencyId,

@@ -96,7 +96,7 @@ public class AccountService {
 
     public Account find(Long id) {
         return accountRepository.findByIdAndOwner(id, currentUser.id())
-                .orElseThrow(() -> new ResourceNotFoundException("Compte introuvable"));
+                .orElseThrow(() -> new ResourceNotFoundException("Compte bancaire introuvable"));
     }
 
     private void apply(Account account, AccountRequest request) {

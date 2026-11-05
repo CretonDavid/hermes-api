@@ -254,7 +254,7 @@ public class RecurringTransactionService {
         if (request.targetAccountId() != null) {
             Account target = accountService.find(request.targetAccountId());
             if (target.getId().equals(account.getId())) {
-                throw new BadRequestException("Les comptes débité et crédité doivent être différents");
+                throw new BadRequestException("Les comptes bancaires débité et crédité doivent être différents");
             }
             recurring.setTargetAccount(target);
             recurring.setDirection(TransactionDirection.DEBIT);

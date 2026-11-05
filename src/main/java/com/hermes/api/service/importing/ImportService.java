@@ -139,7 +139,7 @@ public class ImportService {
     public ImportResultResponse confirm(ImportConfirmRequest request) {
         Account account = accountService.find(request.accountId());
         if (account.isClosed()) {
-            throw new BadRequestException("Le compte " + account.getName() + " est clôturé");
+            throw new BadRequestException("Le compte bancaire " + account.getName() + " est clôturé");
         }
 
         Set<String> existingImportIds = new HashSet<>(transactionRepository.findImportIds(account.getId()));
