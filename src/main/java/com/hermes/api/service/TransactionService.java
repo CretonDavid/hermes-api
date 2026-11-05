@@ -6,7 +6,9 @@ import com.hermes.api.exception.BadRequestException;
 import com.hermes.api.exception.ResourceNotFoundException;
 import com.hermes.api.mapper.TransactionMapper;
 import com.hermes.api.model.Account;
+import com.hermes.api.model.Category;
 import com.hermes.api.model.Transaction;
+import com.hermes.api.model.enums.TransactionDirection;
 import com.hermes.api.model.enums.TransactionStatus;
 import com.hermes.api.repository.TransactionRepository;
 import com.hermes.api.repository.TransactionSpecifications;
@@ -19,6 +21,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -36,17 +39,67 @@ public class TransactionService {
     private final CurrentUser currentUser;
 
     @Transactional(readOnly = true)
-    public PageResponse<TransactionResponse> search(TransactionFilter filter, int page, int size) {
-        Set<Long> categoryIds = filter.categoryIds() == null || filter.categoryIds().isEmpty()
-                ? Set.of()
-                : categoryService.withDescendants(filter.categoryIds());
-
-        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, MAX_PAGE_SIZE),
-                Sort.by(Sort.Order.desc("operationDate"), Sort.Order.desc("id")));
+    public PageResponse<TransactionResponse> search(TransactionFilter filter, int page, int size, String sort, String direction) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, MAX_PAGE_SIZE), sort(sort, direction));
 
         return PageResponse.of(
-                transactionRepository.findAll(TransactionSpecifications.matching(currentUser.id(), filter, categoryIds), pageable),
+                transactionRepository.findAll(TransactionSpecifications.matching(currentUser.id(), filter, categoryIds(filter)), pageable),
                 transactionMapper::toResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TransactionTotals> totals(TransactionFilter filter) {
+        Map<String, List<Transaction>> byCurrency = new TreeMap<>();
+        for (Transaction t : transactionRepository.findAll(TransactionSpecifications.matching(currentUser.id(), filter, categoryIds(filter)))) {
+            byCurrency.computeIfAbsent(t.getAccount().getCurrency().getCode(), code -> new ArrayList<>()).add(t);
+        }
+        return byCurrency.entrySet().stream().map(entry -> {
+            BigDecimal credits = sum(entry.getValue(), TransactionDirection.CREDIT);
+            BigDecimal debits = sum(entry.getValue(), TransactionDirection.DEBIT);
+            return new TransactionTotals(entry.getKey(), entry.getValue().size(), credits, debits, credits.subtract(debits));
+        }).toList();
+    }
+
+    @Transactional
+    public BulkCategoryResponse updateCategory(BulkCategoryRequest request) {
+        Category category = request.categoryId() == null ? null : categoryService.find(request.categoryId());
+        int updated = 0;
+        int skippedTransfers = 0;
+        for (Long id : new LinkedHashSet<>(request.transactionIds())) {
+            Transaction transaction = find(id);
+            if (transaction.isTransfer()) {
+                skippedTransfers++;
+            } else {
+                transaction.setCategory(category);
+                updated++;
+            }
+        }
+        return new BulkCategoryResponse(updated, skippedTransfers);
+    }
+
+    private Set<Long> categoryIds(TransactionFilter filter) {
+        return filter.categoryIds() == null || filter.categoryIds().isEmpty()
+                ? Set.of()
+                : categoryService.withDescendants(filter.categoryIds());
+    }
+
+    // Le montant est trié sans tenir compte de son signe ; l'identifiant garantit un ordre stable
+    private static Sort sort(String sort, String direction) {
+        Sort.Direction order = "asc".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Sort.Order primary = switch (sort) {
+            case "label" -> new Sort.Order(order, "label").ignoreCase();
+            case "account" -> new Sort.Order(order, "account.name").ignoreCase();
+            case "amount" -> new Sort.Order(order, "amount");
+            default -> new Sort.Order(order, "operationDate");
+        };
+        return Sort.by(primary, Sort.Order.desc("id"));
+    }
+
+    private static BigDecimal sum(List<Transaction> transactions, TransactionDirection direction) {
+        return transactions.stream()
+                .filter(t -> t.getDirection() == direction)
+                .map(Transaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     @Transactional(readOnly = true)

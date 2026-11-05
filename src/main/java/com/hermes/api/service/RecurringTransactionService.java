@@ -152,7 +152,9 @@ public class RecurringTransactionService {
                         recurring.getAccount().getName(),
                         recurring.getAccount().getCurrency().getCode(),
                         recurring.isTransfer(),
-                        recurring.isTransfer() ? recurring.getTargetAccount().getName() : null));
+                        recurring.isTransfer() ? recurring.getTargetAccount().getId() : null,
+                        recurring.isTransfer() ? recurring.getTargetAccount().getName() : null,
+                        recurring.isTransfer() ? recurring.getTargetAmount() : null));
                 index++;
                 date = recurring.getFrequency().occurrence(recurring.getStartDate(), recurring.getInterval(), index);
             }

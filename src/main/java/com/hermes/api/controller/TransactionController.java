@@ -22,8 +22,22 @@ public class TransactionController {
     public ResponseEntity<PageResponse<TransactionResponse>> search(
             @ModelAttribute TransactionFilter filter,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size) {
-        return ResponseEntity.ok(transactionService.search(filter, page, size));
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(defaultValue = "date") String sort,
+            @RequestParam(defaultValue = "desc") String direction) {
+        return ResponseEntity.ok(transactionService.search(filter, page, size, sort, direction));
+    }
+
+    // Cumul de toutes les opérations correspondant aux filtres, par devise
+    @GetMapping("/totals")
+    public ResponseEntity<List<TransactionTotals>> totals(@ModelAttribute TransactionFilter filter) {
+        return ResponseEntity.ok(transactionService.totals(filter));
+    }
+
+    // Catégorisation groupée ; les virements internes sont ignorés
+    @PatchMapping("/category")
+    public ResponseEntity<BulkCategoryResponse> updateCategory(@Valid @RequestBody BulkCategoryRequest request) {
+        return ResponseEntity.ok(transactionService.updateCategory(request));
     }
 
     @GetMapping("/payees")
