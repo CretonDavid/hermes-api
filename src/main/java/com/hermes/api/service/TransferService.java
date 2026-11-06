@@ -128,7 +128,7 @@ public class TransferService {
                 .map(converted -> converted.setScale(2, RoundingMode.HALF_EVEN))
                 .orElseThrow(() -> new BadRequestException(
                         "Aucun taux " + from.getCurrency().getCode() + "/" + to.getCurrency().getCode()
-                                + " connu : indiquez le montant crédité"));
+                                + " connu : indiquez le montant reçu ou ajoutez un taux dans les paramètres"));
     }
 
     private static void validate(Account from, Account to) {

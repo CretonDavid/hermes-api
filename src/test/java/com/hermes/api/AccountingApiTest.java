@@ -210,6 +210,36 @@ class AccountingApiTest extends ApiTestSupport {
     }
 
     @Test
+    void recurringTransferBetweenCurrenciesRequiresAnAmountOrARate() throws Exception {
+        Session s = newUser();
+        long type = accountType(s, "Courant", false);
+        long eur = account(s, "Euros", type, eurId(s), "0");
+        long usd = account(s, "Dollars", type, currencyId(s, "USD"), "0");
+        String today = LocalDate.now().toString();
+        String base = "{\"accountId\":" + eur + ",\"targetAccountId\":" + usd + ",\"amount\":100,\"label\":\"Change\","
+                + "\"frequency\":\"MONTHLY\",\"interval\":1,\"startDate\":\"" + today + "\",\"active\":true";
+
+        // Sans taux ni montant reçu : refus explicite, rien n'est créé
+        mockMvc.perform(as(s, post("/recurring-transactions")).content(base + "}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("Aucun taux EUR/USD")));
+        mockMvc.perform(as(s, get("/recurring-transactions"))).andExpect(jsonPath("$.length()").value(0));
+
+        // Avec le montant reçu : l'échéance du jour est générée
+        mockMvc.perform(as(s, post("/recurring-transactions")).content(base + ",\"targetAmount\":110}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.occurrenceCount").value(1));
+
+        // Avec un taux : l'échéance du jour est générée aussi
+        mockMvc.perform(as(s, post("/exchange-rates")).content("{\"baseCurrencyId\":" + eurId(s) + ",\"quoteCurrencyId\":"
+                        + currencyId(s, "USD") + ",\"rate\":1.1,\"date\":\"" + today + "\"}"))
+                .andExpect(status().isCreated());
+        mockMvc.perform(as(s, post("/recurring-transactions")).content(base + "}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.occurrenceCount").value(1));
+    }
+
+    @Test
     void recurringTransactionsGenerateDueOccurrences() throws Exception {
         Session s = newUser();
         long account = account(s, "Courant", accountType(s, "Courant", false), eurId(s), "0");
