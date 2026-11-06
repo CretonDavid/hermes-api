@@ -106,6 +106,19 @@ class AccountingApiTest extends ApiTestSupport {
     }
 
     @Test
+    void accountNameIsLimitedTo50Characters() throws Exception {
+        Session s = newUser();
+        long type = accountType(s, "Courant", false);
+        String body = ",\"accountTypeId\":" + type + ",\"currencyId\":" + eurId(s) + "}";
+
+        mockMvc.perform(as(s, post("/accounts")).content("{\"name\":\"" + "x".repeat(50) + "\"" + body))
+                .andExpect(status().isCreated());
+        mockMvc.perform(as(s, post("/accounts")).content("{\"name\":\"" + "x".repeat(51) + "\"" + body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.name").exists());
+    }
+
+    @Test
     void transferCreatesTwoLinkedTransactionsAndCanBeDeletedAtOnce() throws Exception {
         Session s = newUser();
         long checking = account(s, "Courant", accountType(s, "Courant", false), eurId(s), "500");
