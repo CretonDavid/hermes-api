@@ -10,7 +10,7 @@ import java.time.LocalDate;
 
 public record AccountRequest(
         @NotBlank(message = "Le nom est obligatoire")
-        @Size(max = 100, message = "Le nom ne doit pas dépasser 100 caractères")
+        @Size(max = 25, message = "Le nom ne doit pas dépasser 25 caractères")
         String name,
         @Size(max = 255, message = "La description ne doit pas dépasser 255 caractères")
         String description,
