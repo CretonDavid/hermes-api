@@ -37,7 +37,7 @@ public class AccountTypeService {
     public AccountTypeResponse create(AccountTypeRequest request) {
         String name = request.name().trim();
         if (accountTypeRepository.existsByOwner_IdAndNameIgnoreCase(currentUser.id(), name)) {
-            throw new ResourceAlreadyExistsException("Le type de compte " + name + " existe déjà");
+            throw new ResourceAlreadyExistsException("Le type de compte bancaire " + name + " existe déjà");
         }
         AccountType type = AccountType.builder()
                 .name(name)
@@ -53,7 +53,7 @@ public class AccountTypeService {
         AccountType type = find(id);
         String name = request.name().trim();
         if (!type.getName().equalsIgnoreCase(name) && accountTypeRepository.existsByOwner_IdAndNameIgnoreCase(userId, name)) {
-            throw new ResourceAlreadyExistsException("Le type de compte " + name + " existe déjà");
+            throw new ResourceAlreadyExistsException("Le type de compte bancaire " + name + " existe déjà");
         }
         type.setName(name);
         type.setSavings(request.savings());
@@ -64,13 +64,13 @@ public class AccountTypeService {
     public void delete(Long id) {
         AccountType type = find(id);
         if (accountRepository.existsByAccountType_Id(id)) {
-            throw new BadRequestException("Ce type est utilisé par au moins un compte : changez d'abord le type de ces comptes");
+            throw new BadRequestException("Ce type est utilisé par au moins un compte bancaire : changez d'abord le type de ces comptes bancaires");
         }
         accountTypeRepository.delete(type);
     }
 
     public AccountType find(Long id) {
         return accountTypeRepository.findByIdAndOwner_Id(id, currentUser.id())
-                .orElseThrow(() -> new ResourceNotFoundException("Type de compte introuvable"));
+                .orElseThrow(() -> new ResourceNotFoundException("Type de compte bancaire introuvable"));
     }
 }

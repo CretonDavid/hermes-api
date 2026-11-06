@@ -37,6 +37,46 @@ class AccountingApiTest extends ApiTestSupport {
     }
 
     @Test
+    void transactionsCanBeSortedTotalledAndCategorizedInBulk() throws Exception {
+        Session s = newUser();
+        long type = accountType(s, "Courant", false);
+        long current = account(s, "Courant", type, eurId(s), "0");
+        long savings = account(s, "Livret", type, eurId(s), "0");
+        long small = transaction(s, current, "DEBIT", "10", "Zèbre", null, "2026-01-02");
+        long big = transaction(s, current, "CREDIT", "200", "abricot", null, "2026-01-01");
+        mockMvc.perform(as(s, post("/transfers")).content("{\"fromAccountId\":" + current + ",\"toAccountId\":" + savings
+                + ",\"amount\":50,\"operationDate\":\"2026-01-03\"}")).andExpect(status().isCreated());
+
+        mockMvc.perform(as(s, get("/transactions?accountIds=" + current + "&sort=amount&direction=desc")))
+                .andExpect(jsonPath("$.content[0].id").value(big));
+        mockMvc.perform(as(s, get("/transactions?accountIds=" + current + "&sort=label&direction=asc")))
+                .andExpect(jsonPath("$.content[0].id").value(big));
+        mockMvc.perform(as(s, get("/transactions?sort=account&direction=desc")))
+                .andExpect(jsonPath("$.content[0].accountName").value("Livret"));
+
+        mockMvc.perform(as(s, get("/transactions/totals?accountIds=" + current)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].currencyCode").value("EUR"))
+                .andExpect(jsonPath("$[0].count").value(3))
+                .andExpect(jsonPath("$[0].credits").value(200.0))
+                .andExpect(jsonPath("$[0].debits").value(60.0))
+                .andExpect(jsonPath("$[0].net").value(140.0));
+
+        Number transferId = read(mockMvc.perform(as(s, get("/transactions?kind=TRANSFER&accountIds=" + current))).andReturn(), "$.content[0].id");
+        long category = categoryId(s, "Courses");
+        mockMvc.perform(as(s, patch("/transactions/category"))
+                        .content("{\"transactionIds\":[" + small + "," + transferId + "],\"categoryId\":" + category + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.updated").value(1))
+                .andExpect(jsonPath("$.skippedTransfers").value(1));
+        mockMvc.perform(as(s, get("/transactions/" + small))).andExpect(jsonPath("$.category.id").value(category));
+
+        Session other = newUser();
+        mockMvc.perform(as(other, patch("/transactions/category")).content("{\"transactionIds\":[" + small + "]}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void usersCannotSeeEachOtherData() throws Exception {
         Session alice = newUser();
         Session bob = newUser();
@@ -167,6 +207,36 @@ class AccountingApiTest extends ApiTestSupport {
         mockMvc.perform(as(s, delete("/accounts/" + account + "/reconciliations/" + readId(reconciliation))))
                 .andExpect(status().isNoContent());
         mockMvc.perform(as(s, get("/transactions/" + t1))).andExpect(jsonPath("$.status").value("CLEARED"));
+    }
+
+    @Test
+    void recurringTransferBetweenCurrenciesRequiresAnAmountOrARate() throws Exception {
+        Session s = newUser();
+        long type = accountType(s, "Courant", false);
+        long eur = account(s, "Euros", type, eurId(s), "0");
+        long usd = account(s, "Dollars", type, currencyId(s, "USD"), "0");
+        String today = LocalDate.now().toString();
+        String base = "{\"accountId\":" + eur + ",\"targetAccountId\":" + usd + ",\"amount\":100,\"label\":\"Change\","
+                + "\"frequency\":\"MONTHLY\",\"interval\":1,\"startDate\":\"" + today + "\",\"active\":true";
+
+        // Sans taux ni montant reçu : refus explicite, rien n'est créé
+        mockMvc.perform(as(s, post("/recurring-transactions")).content(base + "}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("Aucun taux EUR/USD")));
+        mockMvc.perform(as(s, get("/recurring-transactions"))).andExpect(jsonPath("$.length()").value(0));
+
+        // Avec le montant reçu : l'échéance du jour est générée
+        mockMvc.perform(as(s, post("/recurring-transactions")).content(base + ",\"targetAmount\":110}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.occurrenceCount").value(1));
+
+        // Avec un taux : l'échéance du jour est générée aussi
+        mockMvc.perform(as(s, post("/exchange-rates")).content("{\"baseCurrencyId\":" + eurId(s) + ",\"quoteCurrencyId\":"
+                        + currencyId(s, "USD") + ",\"rate\":1.1,\"date\":\"" + today + "\"}"))
+                .andExpect(status().isCreated());
+        mockMvc.perform(as(s, post("/recurring-transactions")).content(base + "}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.occurrenceCount").value(1));
     }
 
     @Test

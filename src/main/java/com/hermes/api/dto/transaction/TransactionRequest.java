@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record TransactionRequest(
-        @NotNull(message = "Le compte est obligatoire")
+        @NotNull(message = "Le compte bancaire est obligatoire")
         Long accountId,
         @NotNull(message = "Le sens de l'opération est obligatoire")
         TransactionDirection direction,

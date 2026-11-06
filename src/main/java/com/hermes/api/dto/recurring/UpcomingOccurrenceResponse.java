@@ -15,6 +15,9 @@ public record UpcomingOccurrenceResponse(
         String accountName,
         String currencyCode,
         boolean transfer,
-        String targetAccountName
+        Long targetAccountId,
+        String targetAccountName,
+        // Montant reçu sur le compte cible d'un virement entre devises, s'il est connu
+        BigDecimal targetAmount
 ) {
 }

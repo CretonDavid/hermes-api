@@ -85,6 +85,7 @@ public class RecurringTransactionService {
                 .createdAt(LocalDateTime.now())
                 .build();
         apply(recurring, request);
+        ensureConvertible(recurring, request.startDate());
         schedule(recurring, 0, request.active());
 
         recurringRepository.save(recurring);
@@ -99,6 +100,9 @@ public class RecurringTransactionService {
                 || !recurring.getStartDate().equals(request.startDate())
                 || !Objects.equals(recurring.getEndDate(), request.endDate());
         apply(recurring, request);
+        // Seules les prochaines échéances restent à générer
+        LocalDate today = LocalDate.now();
+        ensureConvertible(recurring, request.startDate().isAfter(today) ? request.startDate() : today);
 
         int index = recurring.getOccurrenceCount();
         if (scheduleChanged) {
@@ -152,7 +156,9 @@ public class RecurringTransactionService {
                         recurring.getAccount().getName(),
                         recurring.getAccount().getCurrency().getCode(),
                         recurring.isTransfer(),
-                        recurring.isTransfer() ? recurring.getTargetAccount().getName() : null));
+                        recurring.isTransfer() ? recurring.getTargetAccount().getId() : null,
+                        recurring.isTransfer() ? recurring.getTargetAccount().getName() : null,
+                        recurring.isTransfer() ? recurring.getTargetAmount() : null));
                 index++;
                 date = recurring.getFrequency().occurrence(recurring.getStartDate(), recurring.getInterval(), index);
             }
@@ -243,6 +249,15 @@ public class RecurringTransactionService {
         }
     }
 
+    // Sans montant reçu ni taux de change, les échéances d'un virement entre devises ne pourraient
+    // pas être générées : mieux vaut le signaler tout de suite qu'échouer ensuite sans rien dire
+    private void ensureConvertible(RecurringTransaction recurring, LocalDate date) {
+        if (recurring.isTransfer()) {
+            transferService.resolveTargetAmount(recurring.getAccount(), recurring.getTargetAccount(),
+                    recurring.getAmount(), recurring.getTargetAmount(), date);
+        }
+    }
+
     private void apply(RecurringTransaction recurring, RecurringTransactionRequest request) {
         Account account = accountService.find(request.accountId());
         if (request.endDate() != null && request.endDate().isBefore(request.startDate())) {
@@ -252,7 +267,7 @@ public class RecurringTransactionService {
         if (request.targetAccountId() != null) {
             Account target = accountService.find(request.targetAccountId());
             if (target.getId().equals(account.getId())) {
-                throw new BadRequestException("Les comptes débité et crédité doivent être différents");
+                throw new BadRequestException("Les comptes bancaires débité et crédité doivent être différents");
             }
             recurring.setTargetAccount(target);
             recurring.setDirection(TransactionDirection.DEBIT);

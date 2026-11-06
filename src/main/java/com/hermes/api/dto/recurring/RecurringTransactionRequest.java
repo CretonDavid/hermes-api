@@ -13,7 +13,7 @@ import java.time.LocalDate;
  * et direction est ignorée.
  */
 public record RecurringTransactionRequest(
-        @NotNull(message = "Le compte est obligatoire")
+        @NotNull(message = "Le compte bancaire est obligatoire")
         Long accountId,
         Long targetAccountId,
         TransactionDirection direction,

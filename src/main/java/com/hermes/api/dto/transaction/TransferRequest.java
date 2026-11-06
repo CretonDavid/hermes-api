@@ -6,9 +6,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record TransferRequest(
-        @NotNull(message = "Le compte débité est obligatoire")
+        @NotNull(message = "Le compte bancaire débité est obligatoire")
         Long fromAccountId,
-        @NotNull(message = "Le compte crédité est obligatoire")
+        @NotNull(message = "Le compte bancaire crédité est obligatoire")
         Long toAccountId,
         @NotNull(message = "Le montant est obligatoire")
         @DecimalMin(value = "0", inclusive = false, message = "Le montant doit être positif")

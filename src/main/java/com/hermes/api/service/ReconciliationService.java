@@ -93,7 +93,7 @@ public class ReconciliationService {
     public void undoLast(Long accountId, Long reconciliationId) {
         accountService.find(accountId);
         Reconciliation last = reconciliationRepository.findFirstByAccount_IdOrderByStatementDateDescIdDesc(accountId)
-                .orElseThrow(() -> new ResourceNotFoundException("Aucun rapprochement pour ce compte"));
+                .orElseThrow(() -> new ResourceNotFoundException("Aucun rapprochement pour ce compte bancaire"));
         if (!last.getId().equals(reconciliationId)) {
             throw new BadRequestException("Seul le dernier rapprochement peut être annulé");
         }

@@ -87,7 +87,7 @@ public class CurrencyService {
         Currency currency = findOwned(id, userId);
 
         if (accountRepository.existsByCurrency_Id(id)) {
-            throw new BadRequestException("Cette devise est utilisée par au moins un compte : changez d'abord la devise de ces comptes");
+            throw new BadRequestException("Cette devise est utilisée par au moins un compte bancaire : changez d'abord la devise de ces comptes bancaires");
         }
         User user = userRepository.findWithCurrencyById(userId).orElseThrow();
         if (user.getReferenceCurrency() != null && user.getReferenceCurrency().getId().equals(id)) {
