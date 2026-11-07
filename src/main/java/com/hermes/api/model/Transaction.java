@@ -78,6 +78,14 @@ public class Transaction {
     @JoinColumn(name = "recurring_transaction_id")
     private RecurringTransaction recurringTransaction;
 
+    // Remboursement par un tiers d'une dépense récurrente, pour la période commençant à reimbursementPeriodStart
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reimbursement_payer_id")
+    private ReimbursementPayer reimbursementPayer;
+
+    @Column(name = "reimbursement_period_start")
+    private LocalDate reimbursementPeriodStart;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reconciliation_id")
     private Reconciliation reconciliation;

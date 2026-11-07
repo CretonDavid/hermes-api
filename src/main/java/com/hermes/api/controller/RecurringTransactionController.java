@@ -1,9 +1,12 @@
 package com.hermes.api.controller;
 
 import com.hermes.api.dto.recurring.RecurringTransactionRequest;
+import com.hermes.api.dto.reimbursement.ReimbursementLinkRequest;
+import com.hermes.api.dto.reimbursement.ReimbursementTrackingResponse;
 import com.hermes.api.dto.recurring.RecurringTransactionResponse;
 import com.hermes.api.dto.recurring.UpcomingOccurrenceResponse;
 import com.hermes.api.service.RecurringTransactionService;
+import com.hermes.api.service.ReimbursementService;
 import com.hermes.api.utils.CurrentUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +22,7 @@ import java.util.List;
 public class RecurringTransactionController {
 
     private final RecurringTransactionService recurringTransactionService;
+    private final ReimbursementService reimbursementService;
     private final CurrentUser currentUser;
 
     @GetMapping
@@ -29,6 +33,24 @@ public class RecurringTransactionController {
     @GetMapping("/upcoming")
     public ResponseEntity<List<UpcomingOccurrenceResponse>> upcoming(@RequestParam(defaultValue = "30") int days) {
         return ResponseEntity.ok(recurringTransactionService.upcoming(days));
+    }
+
+    // Suivi des dépenses récurrentes remboursées par un tiers
+    @GetMapping("/reimbursements")
+    public ResponseEntity<List<ReimbursementTrackingResponse>> reimbursements() {
+        return ResponseEntity.ok(reimbursementService.tracking());
+    }
+
+    @PostMapping("/{id}/reimbursements")
+    public ResponseEntity<Void> linkReimbursement(@PathVariable Long id, @Valid @RequestBody ReimbursementLinkRequest request) {
+        reimbursementService.link(id, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{id}/reimbursements/{transactionId}")
+    public ResponseEntity<Void> unlinkReimbursement(@PathVariable Long id, @PathVariable Long transactionId) {
+        reimbursementService.unlink(id, transactionId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{id}")

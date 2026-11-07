@@ -7,6 +7,7 @@ import com.hermes.api.model.enums.TransactionDirection;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 public record RecurringTransactionResponse(
         Long id,
@@ -30,6 +31,7 @@ public record RecurringTransactionResponse(
         LocalDate nextDate,
         int occurrenceCount,
         boolean active,
-        boolean transfer
+        boolean transfer,
+        List<ReimbursementPayerResponse> reimbursementPayers
 ) {
 }

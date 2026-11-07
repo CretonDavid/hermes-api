@@ -47,6 +47,7 @@ public class RecurringTransactionService {
     private final TransactionMapper transactionMapper;
     private final CurrentUser currentUser;
     private final TransactionTemplate transactionTemplate;
+    private final ReimbursementService reimbursementPayers;
 
     public RecurringTransactionService(RecurringTransactionRepository recurringRepository,
                                        TransactionRepository transactionRepository,
@@ -55,7 +56,9 @@ public class RecurringTransactionService {
                                        TransferService transferService,
                                        TransactionMapper transactionMapper,
                                        CurrentUser currentUser,
+                                       ReimbursementService reimbursementPayers,
                                        PlatformTransactionManager transactionManager) {
+        this.reimbursementPayers = reimbursementPayers;
         this.recurringRepository = recurringRepository;
         this.transactionRepository = transactionRepository;
         this.accountService = accountService;
@@ -127,6 +130,7 @@ public class RecurringTransactionService {
     public void delete(Long id) {
         RecurringTransaction recurring = find(id);
         transactionRepository.detachRecurring(id);
+        transactionRepository.detachReimbursements(id);
         recurringRepository.delete(recurring);
     }
 
@@ -293,6 +297,11 @@ public class RecurringTransactionService {
         recurring.setInterval(request.interval());
         recurring.setStartDate(request.startDate());
         recurring.setEndDate(request.endDate());
+        applyReimbursement(recurring, request);
+    }
+
+    private void applyReimbursement(RecurringTransaction recurring, RecurringTransactionRequest request) {
+        reimbursementPayers.apply(recurring, request.reimbursementPayers());
     }
 
     private RecurringTransaction find(Long id) {

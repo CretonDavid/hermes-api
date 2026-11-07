@@ -283,6 +283,97 @@ class AccountingApiTest extends ApiTestSupport {
     }
 
     @Test
+    void reimbursedRecurringExpenseIsTrackedPerPayerAndYear() throws Exception {
+        Session s = newUser();
+        long account = account(s, "Courant", accountType(s, "Courant", false), eurId(s), "0");
+        long streaming = categoryId(s, "Streaming");
+        String recurringBody = "{\"accountId\":" + account + ",\"direction\":\"DEBIT\",\"amount\":16.99,\"label\":\"Spotify Duo\","
+                + "\"categoryId\":" + streaming + ",\"frequency\":\"MONTHLY\",\"interval\":1,"
+                + "\"startDate\":\"2024-01-15\",\"endDate\":\"2025-12-31\",\"active\":true,\"reimbursementPayers\":";
+
+        // Les parts des tiers ne peuvent pas dépasser 100 %
+        mockMvc.perform(as(s, post("/recurring-transactions")).content(recurringBody
+                        + "[{\"name\":\"Alex\",\"share\":60},{\"name\":\"Sam\",\"share\":50}]}"))
+                .andExpect(status().isBadRequest());
+
+        // Abonnement de 2024 à 2025, remboursé pour moitié par Alex une fois par an, et à 25 % par Sam chaque trimestre
+        MvcResult created = mockMvc.perform(as(s, post("/recurring-transactions")).content(recurringBody
+                        + "[{\"name\":\"Alex\",\"share\":50},{\"name\":\"Sam\",\"share\":25,\"period\":\"QUARTERLY\"}]}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.reimbursementPayers.length()").value(2))
+                .andExpect(jsonPath("$.reimbursementPayers[0].name").value("Alex"))
+                .andExpect(jsonPath("$.reimbursementPayers[0].period").value("YEARLY"))
+                .andExpect(jsonPath("$.reimbursementPayers[1].period").value("QUARTERLY"))
+                .andReturn();
+        long recurring = readId(created);
+        long alex = ((Number) read(created, "$.reimbursementPayers[0].id")).longValue();
+        long sam = ((Number) read(created, "$.reimbursementPayers[1].id")).longValue();
+        String base = "/recurring-transactions/" + recurring + "/reimbursements";
+
+        long refund2024 = transaction(s, account, "CREDIT", "101.94", "Virement Alex", null, "2025-01-20");
+        long partial2025 = transaction(s, account, "CREDIT", "50", "Virement Alex", null, "2025-06-01");
+        long samQ1 = transaction(s, account, "CREDIT", "12.74", "Virement Sam", null, "2025-04-02");
+        long expense = transaction(s, account, "DEBIT", "10", "Autre", null, "2025-06-01");
+
+        mockMvc.perform(as(s, post(base)).content("{\"payerId\":" + alex + ",\"transactionId\":" + refund2024 + ",\"period\":\"2024-06-30\"}"))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(as(s, post(base)).content("{\"payerId\":" + alex + ",\"transactionId\":" + partial2025 + ",\"period\":\"2025-01-01\"}"))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(as(s, post(base)).content("{\"payerId\":" + sam + ",\"transactionId\":" + samQ1 + ",\"period\":\"2025-02-10\"}"))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(as(s, post(base)).content("{\"payerId\":" + alex + ",\"transactionId\":" + expense + ",\"period\":\"2025-01-01\"}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(as(s, get("/recurring-transactions/reimbursements")))
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].payers.length()").value(2))
+                // Alex : la moitié de 12 × 16,99 = 101,94 par an
+                .andExpect(jsonPath("$[0].payers[0].periods.length()").value(2))
+                .andExpect(jsonPath("$[0].payers[0].periods[0].start").value("2025-01-01"))
+                .andExpect(jsonPath("$[0].payers[0].periods[0].due").value(101.94))
+                .andExpect(jsonPath("$[0].payers[0].periods[0].remaining").value(51.94))
+                .andExpect(jsonPath("$[0].payers[0].periods[0].status").value("PARTIAL"))
+                .andExpect(jsonPath("$[0].payers[0].periods[1].start").value("2024-01-01"))
+                .andExpect(jsonPath("$[0].payers[0].periods[1].status").value("PAID"))
+                .andExpect(jsonPath("$[0].payers[0].periods[1].payments[0].transactionId").value((int) refund2024))
+                // Sam : le quart de 3 × 16,99 = 12,74 par trimestre, sur 8 trimestres
+                .andExpect(jsonPath("$[0].payers[1].periods.length()").value(8))
+                .andExpect(jsonPath("$[0].payers[1].periods[3].start").value("2025-01-01"))
+                .andExpect(jsonPath("$[0].payers[1].periods[3].due").value(12.74))
+                .andExpect(jsonPath("$[0].payers[1].periods[3].status").value("PAID"))
+                .andExpect(jsonPath("$[0].payers[1].periods[2].status").value("UNPAID"));
+
+        // Le remboursement prend la catégorie de la dépense et vient en déduction dans les statistiques
+        mockMvc.perform(as(s, get("/transactions/" + refund2024)))
+                .andExpect(jsonPath("$.category.id").value((int) streaming))
+                .andExpect(jsonPath("$.reimbursement.recurringTransactionId").value((int) recurring))
+                .andExpect(jsonPath("$.reimbursement.payerName").value("Alex"))
+                .andExpect(jsonPath("$.reimbursement.periodStart").value("2024-01-01"));
+        mockMvc.perform(as(s, get("/stats/summary?from=2024-01-01&to=2025-01-31&accountIds=" + account)))
+                // 13 prélèvements de 16,99 (220,87) moins le remboursement de 101,94
+                .andExpect(jsonPath("$.expenses").value(118.93));
+
+        mockMvc.perform(as(s, delete(base + "/" + partial2025))).andExpect(status().isNoContent());
+        mockMvc.perform(as(s, get("/recurring-transactions/reimbursements")))
+                .andExpect(jsonPath("$[0].payers[0].periods[0].status").value("UNPAID"));
+
+        // Retirer Sam détache ses remboursements, Alex garde les siens
+        mockMvc.perform(as(s, put("/recurring-transactions/" + recurring)).content(recurringBody
+                        + "[{\"id\":" + alex + ",\"name\":\"Alex\",\"share\":50}]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reimbursementPayers.length()").value(1));
+        mockMvc.perform(as(s, get("/transactions/" + samQ1))).andExpect(jsonPath("$.reimbursement").doesNotExist());
+        mockMvc.perform(as(s, get("/transactions/" + refund2024))).andExpect(jsonPath("$.reimbursement.payerId").value((int) alex));
+
+        // Supprimer la récurrence conserve les opérations
+        mockMvc.perform(as(s, delete("/recurring-transactions/" + recurring))).andExpect(status().isNoContent());
+        mockMvc.perform(as(s, get("/recurring-transactions/reimbursements"))).andExpect(jsonPath("$.length()").value(0));
+        mockMvc.perform(as(s, get("/transactions/" + refund2024)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reimbursement").doesNotExist());
+    }
+
+    @Test
     void csvImportPreviewsDetectsDuplicatesAndSuggestsCategories() throws Exception {
         Session s = newUser();
         long account = account(s, "Courant", accountType(s, "Courant", false), eurId(s), "0");

@@ -151,6 +151,11 @@ public class TransactionService {
             transaction.setAccount(account);
         }
         apply(transaction, request);
+        if (transaction.getReimbursementPayer() != null && transaction.getDirection() != TransactionDirection.CREDIT) {
+            // Une dépense ne peut pas être un remboursement reçu
+            transaction.setReimbursementPayer(null);
+            transaction.setReimbursementPeriodStart(null);
+        }
         return transactionMapper.toResponse(transaction);
     }
 

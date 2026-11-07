@@ -3,14 +3,16 @@ package com.hermes.api.dto.recurring;
 import com.hermes.api.model.enums.PaymentMethod;
 import com.hermes.api.model.enums.RecurrenceFrequency;
 import com.hermes.api.model.enums.TransactionDirection;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * Si targetAccountId est renseigné, la récurrence est un virement de accountId vers targetAccountId
- * et direction est ignorée.
+ * et direction est ignorée. Une dépense peut être remboursée en partie par des tiers (reimbursementPayers).
  */
 public record RecurringTransactionRequest(
         @NotNull(message = "Le compte bancaire est obligatoire")
@@ -39,6 +41,8 @@ public record RecurringTransactionRequest(
         @NotNull(message = "La date de début est obligatoire")
         LocalDate startDate,
         LocalDate endDate,
-        boolean active
+        boolean active,
+        @Size(max = 20, message = "Une dépense ne peut pas être remboursée par plus de 20 tiers")
+        List<@Valid ReimbursementPayerRequest> reimbursementPayers
 ) {
 }

@@ -8,6 +8,7 @@ import com.hermes.api.model.Account;
 import com.hermes.api.repository.AccountRepository;
 import com.hermes.api.repository.ReconciliationRepository;
 import com.hermes.api.repository.RecurringTransactionRepository;
+import com.hermes.api.repository.ReimbursementPayerRepository;
 import com.hermes.api.repository.TransactionRepository;
 import com.hermes.api.repository.TransactionRepository.AccountBalanceView;
 import com.hermes.api.utils.CurrentUser;
@@ -34,6 +35,7 @@ public class AccountService {
     private final TransactionRepository transactionRepository;
     private final ReconciliationRepository reconciliationRepository;
     private final RecurringTransactionRepository recurringTransactionRepository;
+    private final ReimbursementPayerRepository reimbursementPayerRepository;
     private final AccountTypeService accountTypeService;
     private final CurrencyService currencyService;
     private final AccountMapper accountMapper;
@@ -87,8 +89,10 @@ public class AccountService {
 
         transactionRepository.unlinkTransfersOfAccount(id);
         transactionRepository.detachRecurringOfAccount(id);
+        transactionRepository.detachReimbursementsOfAccount(id);
         transactionRepository.deleteByAccountId(id);
         reconciliationRepository.deleteByAccountId(id);
+        reimbursementPayerRepository.deleteByAccountId(id);
         recurringTransactionRepository.deleteByAccountId(id);
         accountRepository.delete(account);
         log.info("Account {} deleted", id);

@@ -41,6 +41,7 @@ public class UserService {
     private final TransactionRepository transactionRepository;
     private final ReconciliationRepository reconciliationRepository;
     private final RecurringTransactionRepository recurringTransactionRepository;
+    private final ReimbursementPayerRepository reimbursementPayerRepository;
     private final AccountRepository accountRepository;
     private final CategoryRepository categoryRepository;
     private final ExchangeRateRepository exchangeRateRepository;
@@ -132,6 +133,7 @@ public class UserService {
         transactionRepository.unlinkAllByOwnerId(userId);
         transactionRepository.deleteByOwnerId(userId);
         reconciliationRepository.deleteByOwnerId(userId);
+        reimbursementPayerRepository.deleteByOwnerId(userId);
         recurringTransactionRepository.deleteByOwnerId(userId);
         accountRepository.deleteByOwnerId(userId);
         categoryRepository.clearParentsByOwnerId(userId);

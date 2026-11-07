@@ -134,6 +134,30 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
     void detachRecurring(Long recurringId);
 
     @Modifying(flushAutomatically = true)
+    @Query("update Transaction t set t.reimbursementPayer = null, t.reimbursementPeriodStart = null "
+            + "where t.reimbursementPayer.id in (select p.id from ReimbursementPayer p where p.recurringTransaction.id = :recurringId)")
+    void detachReimbursements(Long recurringId);
+
+    @Modifying(flushAutomatically = true)
+    @Query("update Transaction t set t.reimbursementPayer = null, t.reimbursementPeriodStart = null "
+            + "where t.reimbursementPayer.id in :payerIds")
+    void detachReimbursementPayers(List<Long> payerIds);
+
+    @Modifying(flushAutomatically = true)
+    @Query("update Transaction t set t.reimbursementPayer = null, t.reimbursementPeriodStart = null where t.reimbursementPayer.id in "
+            + "(select p.id from ReimbursementPayer p where p.recurringTransaction.account.id = :accountId "
+            + "or p.recurringTransaction.targetAccount.id = :accountId)")
+    void detachReimbursementsOfAccount(Long accountId);
+
+    // Dépenses générées par des récurrences remboursées et remboursements rattachés, pour le suivi
+    @Query("""
+            select t from Transaction t join fetch t.account a join fetch a.currency
+            left join fetch t.reimbursementPayer p
+            where t.recurringTransaction.id in :recurringIds or p.recurringTransaction.id in :recurringIds
+            """)
+    List<Transaction> findForReimbursements(List<Long> recurringIds);
+
+    @Modifying(flushAutomatically = true)
     @Query("update Transaction t set t.recurringTransaction = null where t.recurringTransaction.id in "
             + "(select r.id from RecurringTransaction r where r.account.id = :accountId or r.targetAccount.id = :accountId)")
     void detachRecurringOfAccount(Long accountId);
@@ -149,7 +173,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
     void deleteByAccountId(Long accountId);
 
     @Modifying(flushAutomatically = true)
-    @Query("update Transaction t set t.transferPeer = null, t.recurringTransaction = null, t.reconciliation = null "
+    @Query("update Transaction t set t.transferPeer = null, t.recurringTransaction = null, t.reconciliation = null, "
+            + "t.reimbursementPayer = null "
             + "where t.account.id in (select a.id from Account a where a.owner.id = :ownerId)")
     void unlinkAllByOwnerId(UUID ownerId);
 
