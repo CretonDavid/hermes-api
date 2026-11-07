@@ -7,20 +7,18 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Suivi des remboursements d'une dépense récurrente, période par période (la plus récente d'abord).
+ * Suivi des remboursements d'une dépense récurrente, tiers par tiers puis période par période
+ * (la plus récente d'abord).
  */
 public record ReimbursementTrackingResponse(
         Long recurringTransactionId,
         String label,
-        String payer,
-        int share,
-        ReimbursementPeriod period,
         String currencyCode,
-        List<PeriodStatus> periods
+        List<PayerTracking> payers
 ) {
 
     public enum Status {
-        // Période terminée ou en cours, intégralement remboursée à ce jour
+        // Intégralement remboursée à ce jour
         PAID,
         // Période terminée, remboursée en partie
         PARTIAL,
@@ -28,6 +26,15 @@ public record ReimbursementTrackingResponse(
         UNPAID,
         // Période en cours, pas encore intégralement remboursée
         IN_PROGRESS
+    }
+
+    public record PayerTracking(
+            Long payerId,
+            String name,
+            BigDecimal share,
+            ReimbursementPeriod period,
+            List<PeriodStatus> periods
+    ) {
     }
 
     public record PeriodStatus(

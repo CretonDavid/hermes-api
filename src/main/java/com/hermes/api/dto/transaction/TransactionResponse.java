@@ -30,8 +30,9 @@ public record TransactionResponse(
         LocalDateTime createdAt
 ) {
 
-    // Dépense récurrente remboursée par cette opération, et début de la période couverte
-    public record ReimbursementSummary(Long recurringTransactionId, String label, ReimbursementPeriod period, LocalDate periodStart) {
+    // Dépense récurrente remboursée par cette opération, tiers et début de la période couverte
+    public record ReimbursementSummary(Long recurringTransactionId, String label, Long payerId, String payerName,
+                                       ReimbursementPeriod period, LocalDate periodStart) {
     }
 
     public record CategorySummary(Long id, String name, String color, String icon) {

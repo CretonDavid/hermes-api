@@ -2,17 +2,17 @@ package com.hermes.api.dto.recurring;
 
 import com.hermes.api.model.enums.PaymentMethod;
 import com.hermes.api.model.enums.RecurrenceFrequency;
-import com.hermes.api.model.enums.ReimbursementPeriod;
 import com.hermes.api.model.enums.TransactionDirection;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * Si targetAccountId est renseigné, la récurrence est un virement de accountId vers targetAccountId
- * et direction est ignorée. Si reimbursementPayer est renseigné, la dépense est remboursée par ce tiers
- * (reimbursementShare % du montant, 100 par défaut, à chaque reimbursementPeriod, annuelle par défaut).
+ * et direction est ignorée. Une dépense peut être remboursée en partie par des tiers (reimbursementPayers).
  */
 public record RecurringTransactionRequest(
         @NotNull(message = "Le compte bancaire est obligatoire")
@@ -42,11 +42,7 @@ public record RecurringTransactionRequest(
         LocalDate startDate,
         LocalDate endDate,
         boolean active,
-        @Size(max = 100, message = "Le nom de la personne qui rembourse ne doit pas dépasser 100 caractères")
-        String reimbursementPayer,
-        @Min(value = 1, message = "La part remboursée doit être comprise entre 1 et 100 %")
-        @Max(value = 100, message = "La part remboursée doit être comprise entre 1 et 100 %")
-        Integer reimbursementShare,
-        ReimbursementPeriod reimbursementPeriod
+        @Size(max = 20, message = "Une dépense ne peut pas être remboursée par plus de 20 tiers")
+        List<@Valid ReimbursementPayerRequest> reimbursementPayers
 ) {
 }

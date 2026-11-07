@@ -1,10 +1,12 @@
 package com.hermes.api.mapper;
 
 import com.hermes.api.dto.recurring.RecurringTransactionResponse;
+import com.hermes.api.dto.recurring.ReimbursementPayerResponse;
 import com.hermes.api.dto.transaction.TransactionResponse;
 import com.hermes.api.dto.transaction.TransactionResponse.TransferSummary;
 import com.hermes.api.model.Account;
 import com.hermes.api.model.RecurringTransaction;
+import com.hermes.api.model.ReimbursementPayer;
 import com.hermes.api.model.Transaction;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -38,11 +40,7 @@ public class TransactionMapper {
                 entity.getStatus(),
                 transfer,
                 entity.getRecurringTransaction() == null ? null : entity.getRecurringTransaction().getId(),
-                entity.getReimbursedRecurring() == null ? null : new TransactionResponse.ReimbursementSummary(
-                        entity.getReimbursedRecurring().getId(),
-                        entity.getReimbursedRecurring().getLabel(),
-                        entity.getReimbursedRecurring().getReimbursementPeriod(),
-                        entity.getReimbursementPeriodStart()),
+                reimbursement(entity),
                 entity.getCreatedAt()
         );
     }
@@ -74,9 +72,19 @@ public class TransactionMapper {
                 entity.getOccurrenceCount(),
                 entity.isActive(),
                 entity.isTransfer(),
-                entity.getReimbursementPayer(),
-                entity.getReimbursementShare(),
-                entity.getReimbursementPeriod()
+                entity.getReimbursementPayers().stream()
+                        .map(p -> new ReimbursementPayerResponse(p.getId(), p.getName(), p.getShare(), p.getPeriod()))
+                        .toList()
         );
+    }
+
+    private static TransactionResponse.ReimbursementSummary reimbursement(Transaction entity) {
+        ReimbursementPayer payer = entity.getReimbursementPayer();
+        if (payer == null) {
+            return null;
+        }
+        RecurringTransaction recurring = payer.getRecurringTransaction();
+        return new TransactionResponse.ReimbursementSummary(recurring.getId(), recurring.getLabel(),
+                payer.getId(), payer.getName(), payer.getPeriod(), entity.getReimbursementPeriodStart());
     }
 }

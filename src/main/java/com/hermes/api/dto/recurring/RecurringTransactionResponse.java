@@ -3,11 +3,11 @@ package com.hermes.api.dto.recurring;
 import com.hermes.api.dto.transaction.TransactionResponse;
 import com.hermes.api.model.enums.PaymentMethod;
 import com.hermes.api.model.enums.RecurrenceFrequency;
-import com.hermes.api.model.enums.ReimbursementPeriod;
 import com.hermes.api.model.enums.TransactionDirection;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 public record RecurringTransactionResponse(
         Long id,
@@ -32,8 +32,6 @@ public record RecurringTransactionResponse(
         int occurrenceCount,
         boolean active,
         boolean transfer,
-        String reimbursementPayer,
-        Integer reimbursementShare,
-        ReimbursementPeriod reimbursementPeriod
+        List<ReimbursementPayerResponse> reimbursementPayers
 ) {
 }

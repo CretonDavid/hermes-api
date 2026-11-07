@@ -2,7 +2,6 @@ package com.hermes.api.model;
 
 import com.hermes.api.model.enums.PaymentMethod;
 import com.hermes.api.model.enums.RecurrenceFrequency;
-import com.hermes.api.model.enums.ReimbursementPeriod;
 import com.hermes.api.model.enums.TransactionDirection;
 import jakarta.persistence.*;
 import lombok.*;
@@ -10,6 +9,8 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Modèle d'opération récurrente. Si {@code targetAccount} est renseigné, il s'agit d'un virement
@@ -92,23 +93,17 @@ public class RecurringTransaction {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    // Tiers qui rembourse cette dépense (abonnement partagé par exemple), null si personne
-    @Column(name = "reimbursement_payer", length = 100)
-    private String reimbursementPayer;
-
-    // Part remboursée, en pourcentage
-    @Column(name = "reimbursement_share")
-    private Integer reimbursementShare;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "reimbursement_period", length = 10)
-    private ReimbursementPeriod reimbursementPeriod;
+    // Tiers qui remboursent une part de cette dépense (abonnement partagé par exemple)
+    @OneToMany(mappedBy = "recurringTransaction", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id")
+    @Builder.Default
+    private List<ReimbursementPayer> reimbursementPayers = new ArrayList<>();
 
     public boolean isTransfer() {
         return targetAccount != null;
     }
 
     public boolean isReimbursed() {
-        return reimbursementPayer != null;
+        return !reimbursementPayers.isEmpty();
     }
 }
