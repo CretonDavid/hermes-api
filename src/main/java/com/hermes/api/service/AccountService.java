@@ -87,6 +87,7 @@ public class AccountService {
 
         transactionRepository.unlinkTransfersOfAccount(id);
         transactionRepository.detachRecurringOfAccount(id);
+        transactionRepository.detachReimbursementsOfAccount(id);
         transactionRepository.deleteByAccountId(id);
         reconciliationRepository.deleteByAccountId(id);
         recurringTransactionRepository.deleteByAccountId(id);

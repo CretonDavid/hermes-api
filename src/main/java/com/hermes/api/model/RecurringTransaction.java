@@ -2,6 +2,7 @@ package com.hermes.api.model;
 
 import com.hermes.api.model.enums.PaymentMethod;
 import com.hermes.api.model.enums.RecurrenceFrequency;
+import com.hermes.api.model.enums.ReimbursementPeriod;
 import com.hermes.api.model.enums.TransactionDirection;
 import jakarta.persistence.*;
 import lombok.*;
@@ -91,7 +92,23 @@ public class RecurringTransaction {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    // Tiers qui rembourse cette dépense (abonnement partagé par exemple), null si personne
+    @Column(name = "reimbursement_payer", length = 100)
+    private String reimbursementPayer;
+
+    // Part remboursée, en pourcentage
+    @Column(name = "reimbursement_share")
+    private Integer reimbursementShare;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reimbursement_period", length = 10)
+    private ReimbursementPeriod reimbursementPeriod;
+
     public boolean isTransfer() {
         return targetAccount != null;
+    }
+
+    public boolean isReimbursed() {
+        return reimbursementPayer != null;
     }
 }

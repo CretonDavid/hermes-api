@@ -9,6 +9,7 @@ import com.hermes.api.mapper.TransactionMapper;
 import com.hermes.api.model.Account;
 import com.hermes.api.model.RecurringTransaction;
 import com.hermes.api.model.Transaction;
+import com.hermes.api.model.enums.ReimbursementPeriod;
 import com.hermes.api.model.enums.TransactionDirection;
 import com.hermes.api.model.enums.TransactionStatus;
 import com.hermes.api.repository.RecurringTransactionRepository;
@@ -127,6 +128,7 @@ public class RecurringTransactionService {
     public void delete(Long id) {
         RecurringTransaction recurring = find(id);
         transactionRepository.detachRecurring(id);
+        transactionRepository.detachReimbursements(id);
         recurringRepository.delete(recurring);
     }
 
@@ -293,6 +295,27 @@ public class RecurringTransactionService {
         recurring.setInterval(request.interval());
         recurring.setStartDate(request.startDate());
         recurring.setEndDate(request.endDate());
+        applyReimbursement(recurring, request);
+    }
+
+    private void applyReimbursement(RecurringTransaction recurring, RecurringTransactionRequest request) {
+        String payer = AccountService.blankToNull(request.reimbursementPayer());
+        if (payer == null) {
+            // Les remboursements déjà rattachés redeviennent de simples revenus
+            if (recurring.isReimbursed() && recurring.getId() != null) {
+                transactionRepository.detachReimbursements(recurring.getId());
+            }
+            recurring.setReimbursementPayer(null);
+            recurring.setReimbursementShare(null);
+            recurring.setReimbursementPeriod(null);
+            return;
+        }
+        if (recurring.isTransfer() || recurring.getDirection() != TransactionDirection.DEBIT) {
+            throw new BadRequestException("Seule une dépense récurrente peut être remboursée par un tiers");
+        }
+        recurring.setReimbursementPayer(payer);
+        recurring.setReimbursementShare(request.reimbursementShare() == null ? 100 : request.reimbursementShare());
+        recurring.setReimbursementPeriod(request.reimbursementPeriod() == null ? ReimbursementPeriod.YEARLY : request.reimbursementPeriod());
     }
 
     private RecurringTransaction find(Long id) {

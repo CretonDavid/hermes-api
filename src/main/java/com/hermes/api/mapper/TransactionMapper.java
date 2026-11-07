@@ -38,6 +38,11 @@ public class TransactionMapper {
                 entity.getStatus(),
                 transfer,
                 entity.getRecurringTransaction() == null ? null : entity.getRecurringTransaction().getId(),
+                entity.getReimbursedRecurring() == null ? null : new TransactionResponse.ReimbursementSummary(
+                        entity.getReimbursedRecurring().getId(),
+                        entity.getReimbursedRecurring().getLabel(),
+                        entity.getReimbursedRecurring().getReimbursementPeriod(),
+                        entity.getReimbursementPeriodStart()),
                 entity.getCreatedAt()
         );
     }
@@ -68,7 +73,10 @@ public class TransactionMapper {
                 entity.getNextDate(),
                 entity.getOccurrenceCount(),
                 entity.isActive(),
-                entity.isTransfer()
+                entity.isTransfer(),
+                entity.getReimbursementPayer(),
+                entity.getReimbursementShare(),
+                entity.getReimbursementPeriod()
         );
     }
 }
