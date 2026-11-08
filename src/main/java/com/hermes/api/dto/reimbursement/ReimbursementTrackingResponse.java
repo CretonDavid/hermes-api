@@ -44,7 +44,11 @@ public record ReimbursementTrackingResponse(
             BigDecimal expenses,
             BigDecimal due,
             BigDecimal received,
+            // Part due couverte par le trop-perçu des périodes précédentes
+            BigDecimal advanceUsed,
             BigDecimal remaining,
+            // Trop-perçu restant après cette période, reporté sur les suivantes
+            BigDecimal surplus,
             Status status,
             List<Payment> payments
     ) {

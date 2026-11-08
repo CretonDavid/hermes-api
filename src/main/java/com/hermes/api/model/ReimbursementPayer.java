@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 /**
  * Tiers qui rembourse une part d'une dépense récurrente (abonnement partagé par exemple).
@@ -37,4 +38,13 @@ public class ReimbursementPayer {
     @Enumerated(EnumType.STRING)
     @Column(name = "period", nullable = false, length = 10)
     private ReimbursementPeriod period;
+
+    // Premier jour de la première période due ; null pour les tiers créés avant ce champ
+    @Column(name = "start_date")
+    private LocalDate startDate;
+
+    // Première période due : celle choisie, ou à défaut celle du début de la récurrence
+    public LocalDate firstPeriod() {
+        return period.start(startDate != null ? startDate : recurringTransaction.getStartDate());
+    }
 }

@@ -74,7 +74,13 @@ public class ReimbursementService {
             }
             payer.setName(request.name().trim());
             payer.setShare(request.share());
-            payer.setPeriod(request.period() == null ? ReimbursementPeriod.YEARLY : request.period());
+            ReimbursementPeriod period = request.period() == null ? ReimbursementPeriod.YEARLY : request.period();
+            payer.setPeriod(period);
+            // Un nouveau tiers doit par défaut à partir de la période en cours
+            LocalDate start = request.startDate() != null ? request.startDate()
+                    : payer.getStartDate() != null ? payer.getStartDate()
+                    : payer.getId() == null ? LocalDate.now() : null;
+            payer.setStartDate(start == null ? null : period.start(start));
         }
 
         List<Long> removed = existing.keySet().stream().filter(id -> !kept.contains(id)).toList();
@@ -168,29 +174,34 @@ public class ReimbursementService {
             paidByPeriod.computeIfAbsent(period.start(t.getReimbursementPeriodStart()), d -> new ArrayList<>()).add(t);
         }
 
-        // De la première période concernée jusqu'à la période en cours (ou une période future déjà payée d'avance)
+        // De la première période due jusqu'à la période en cours (ou une période future déjà payée d'avance)
         LocalDate current = period.start(today);
-        LocalDate first = period.start(recurring.getStartDate());
+        LocalDate first = payer.firstPeriod();
         LocalDate last = current;
         if (recurring.getEndDate() != null && recurring.getEndDate().isBefore(current)) {
             last = period.start(recurring.getEndDate());
         }
-        for (LocalDate d : spentByPeriod.keySet()) {
-            first = d.isBefore(first) ? d : first;
-        }
-        for (LocalDate d : paidByPeriod.keySet()) {
-            first = d.isBefore(first) ? d : first;
-            last = d.isAfter(last) ? d : last;
+        // Un versement rattaché à une période antérieure au début (date avancée depuis) compte comme une avance
+        BigDecimal advance = BigDecimal.ZERO;
+        for (Map.Entry<LocalDate, List<Transaction>> e : paidByPeriod.entrySet()) {
+            if (e.getKey().isBefore(first)) {
+                advance = advance.add(sum(e.getValue()));
+            } else if (e.getKey().isAfter(last)) {
+                last = e.getKey();
+            }
         }
 
+        // Dans l'ordre chronologique, ce qui est versé en trop est reporté sur les périodes suivantes
         List<PeriodStatus> periods = new ArrayList<>();
         for (LocalDate start = first; !start.isAfter(last); start = period.next(start)) {
             List<Transaction> received = paidByPeriod.getOrDefault(start, List.of());
-            if (start.isAfter(current) && received.isEmpty()) {
+            if (start.isAfter(current) && received.isEmpty() && advance.signum() == 0) {
                 continue;
             }
-            periods.add(periodStatus(start, period.end(start), today,
-                    spentByPeriod.getOrDefault(start, BigDecimal.ZERO), payer.getShare(), received));
+            PeriodStatus status = periodStatus(start, period.end(start), today,
+                    spentByPeriod.getOrDefault(start, BigDecimal.ZERO), payer.getShare(), received, advance);
+            advance = status.surplus();
+            periods.add(status);
         }
         Collections.reverse(periods);
 
@@ -198,10 +209,12 @@ public class ReimbursementService {
     }
 
     private static PeriodStatus periodStatus(LocalDate start, LocalDate end, LocalDate today, BigDecimal spent,
-                                             BigDecimal share, List<Transaction> received) {
+                                             BigDecimal share, List<Transaction> received, BigDecimal advance) {
         BigDecimal due = spent.multiply(share).divide(HUNDRED, 2, RoundingMode.HALF_UP);
-        BigDecimal paid = received.stream().map(Transaction::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal remaining = due.subtract(paid).max(BigDecimal.ZERO);
+        BigDecimal paid = sum(received);
+        BigDecimal advanceUsed = advance.min(due);
+        BigDecimal remaining = due.subtract(advanceUsed).subtract(paid).max(BigDecimal.ZERO);
+        BigDecimal surplus = advance.add(paid).subtract(due).max(BigDecimal.ZERO);
         boolean ended = end.isBefore(today);
 
         Status status;
@@ -217,6 +230,10 @@ public class ReimbursementService {
                 .sorted(Comparator.comparing(Transaction::getOperationDate))
                 .map(t -> new Payment(t.getId(), t.getOperationDate(), t.getAmount(), t.getLabel(), t.getAccount().getName()))
                 .toList();
-        return new PeriodStatus(start, end, ended, spent, due, paid, remaining, status, list);
+        return new PeriodStatus(start, end, ended, spent, due, paid, advanceUsed, remaining, surplus, status, list);
+    }
+
+    private static BigDecimal sum(List<Transaction> transactions) {
+        return transactions.stream().map(Transaction::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }

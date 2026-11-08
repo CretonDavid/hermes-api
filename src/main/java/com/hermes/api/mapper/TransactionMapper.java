@@ -73,7 +73,8 @@ public class TransactionMapper {
                 entity.isActive(),
                 entity.isTransfer(),
                 entity.getReimbursementPayers().stream()
-                        .map(p -> new ReimbursementPayerResponse(p.getId(), p.getName(), p.getShare(), p.getPeriod()))
+                        .map(p -> new ReimbursementPayerResponse(p.getId(), p.getName(), p.getShare(), p.getPeriod(),
+                                p.firstPeriod()))
                         .toList()
         );
     }

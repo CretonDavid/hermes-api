@@ -27,6 +27,9 @@ public final class TransactionSpecifications {
             if (filter.accountIds() != null && !filter.accountIds().isEmpty()) {
                 predicates.add(root.get("account").get("id").in(filter.accountIds()));
             }
+            if (filter.recurringTransactionId() != null) {
+                predicates.add(cb.equal(root.get("recurringTransaction").get("id"), filter.recurringTransactionId()));
+            }
             if (filter.from() != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("operationDate"), filter.from()));
             }
