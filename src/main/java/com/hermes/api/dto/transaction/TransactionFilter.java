@@ -20,7 +20,9 @@ public record TransactionFilter(
         TransactionStatus status,
         String search,
         BigDecimal minAmount,
-        BigDecimal maxAmount
+        BigDecimal maxAmount,
+        // Opérations générées par cette récurrence
+        Long recurringTransactionId
 ) {
 
     public enum TransactionKind {

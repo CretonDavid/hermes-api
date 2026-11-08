@@ -298,8 +298,11 @@ class AccountingApiTest extends ApiTestSupport {
 
         // Abonnement de 2024 à 2025, remboursé pour moitié par Alex une fois par an, et à 25 % par Sam chaque trimestre
         MvcResult created = mockMvc.perform(as(s, post("/recurring-transactions")).content(recurringBody
-                        + "[{\"name\":\"Alex\",\"share\":50},{\"name\":\"Sam\",\"share\":25,\"period\":\"QUARTERLY\"}]}"))
+                        + "[{\"name\":\"Alex\",\"share\":50,\"startDate\":\"2024-03-10\"},"
+                        + "{\"name\":\"Sam\",\"share\":25,\"period\":\"QUARTERLY\",\"startDate\":\"2024-01-01\"}]}"))
                 .andExpect(status().isCreated())
+                // La date de début est ramenée au début de la période
+                .andExpect(jsonPath("$.reimbursementPayers[0].startDate").value("2024-01-01"))
                 .andExpect(jsonPath("$.reimbursementPayers.length()").value(2))
                 .andExpect(jsonPath("$.reimbursementPayers[0].name").value("Alex"))
                 .andExpect(jsonPath("$.reimbursementPayers[0].period").value("YEARLY"))
@@ -371,6 +374,47 @@ class AccountingApiTest extends ApiTestSupport {
         mockMvc.perform(as(s, get("/transactions/" + refund2024)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reimbursement").doesNotExist());
+    }
+
+    @Test
+    void reimbursementStartsAtChosenPeriodAndCarriesSurplusForward() throws Exception {
+        Session s = newUser();
+        long account = account(s, "Courant", accountType(s, "Courant", false), eurId(s), "0");
+        // 10 € par mois depuis 2024, Alex en rembourse la moitié chaque année à partir de 2025
+        MvcResult created = mockMvc.perform(as(s, post("/recurring-transactions")).content(
+                        "{\"accountId\":" + account + ",\"direction\":\"DEBIT\",\"amount\":10,\"label\":\"Crunchyroll\","
+                                + "\"frequency\":\"MONTHLY\",\"interval\":1,\"startDate\":\"2024-01-05\","
+                                + "\"active\":true,\"reimbursementPayers\":[{\"name\":\"Alex\",\"share\":50,\"startDate\":\"2025-06-01\"},"
+                                + "{\"name\":\"Sam\",\"share\":10}]}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.reimbursementPayers[0].startDate").value("2025-01-01"))
+                // Sans date, un nouveau tiers doit à partir de la période en cours
+                .andExpect(jsonPath("$.reimbursementPayers[1].startDate").value(LocalDate.now().withDayOfYear(1).toString()))
+                .andReturn();
+        long recurring = readId(created);
+        long alex = ((Number) read(created, "$.reimbursementPayers[0].id")).longValue();
+        // 200 € versés pour 2025 alors que 60 € sont dus : 140 € d'avance reportés sur 2026
+        long refund = transaction(s, account, "CREDIT", "200", "Virement Alex", null, "2025-12-20");
+        mockMvc.perform(as(s, post("/recurring-transactions/" + recurring + "/reimbursements"))
+                        .content("{\"payerId\":" + alex + ",\"transactionId\":" + refund + ",\"period\":\"2025-01-01\"}"))
+                .andExpect(status().isNoContent());
+
+        int year = LocalDate.now().getYear();
+        mockMvc.perform(as(s, get("/recurring-transactions/reimbursements")))
+                // Rien n'est dû pour 2024, antérieure au début
+                .andExpect(jsonPath("$[0].payers[0].periods.length()").value(year - 2025 + 1))
+                .andExpect(jsonPath("$[0].payers[0].periods[-1].start").value("2025-01-01"))
+                .andExpect(jsonPath("$[0].payers[0].periods[-1].due").value(60.0))
+                .andExpect(jsonPath("$[0].payers[0].periods[-1].status").value("PAID"))
+                .andExpect(jsonPath("$[0].payers[0].periods[-1].surplus").value(140.0))
+                .andExpect(jsonPath("$[0].payers[0].periods[-2].start").value("2026-01-01"))
+                .andExpect(jsonPath("$[0].payers[0].periods[-2].remaining").value(0))
+                .andExpect(jsonPath("$[0].payers[0].periods[-2].status").value("PAID"));
+
+        // Les opérations générées par la récurrence se filtrent par récurrence
+        mockMvc.perform(as(s, get("/transactions?recurringTransactionId=" + recurring + "&size=100")))
+                .andExpect(jsonPath("$.content[0].recurringTransactionId").value((int) recurring))
+                .andExpect(jsonPath("$.content[?(@.label == 'Virement Alex')]").isEmpty());
     }
 
     @Test
