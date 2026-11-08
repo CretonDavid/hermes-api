@@ -31,8 +31,6 @@ services:
       SPRING_DATASOURCE_USERNAME: hermes
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant dans .env}
-      # Derrière le nginx du front : en-têtes Host / X-Forwarded-* pris en compte
-      SERVER_FORWARDHEADERSSTRATEGY: native
       # Les opérations récurrentes sont générées à 1 h, heure locale
       TZ: ${TZ:-Europe/Paris}
 

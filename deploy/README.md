@@ -65,6 +65,9 @@ docker compose start api
 
 ## Derrière le nginx du serveur (plus tard, pour le VPN ou un nom de domaine)
 
-Un `location` qui relaie vers `http://127.0.0.1:8090` suffit, avec
-`proxy_set_header Host $http_host;` et `proxy_set_header X-Forwarded-Proto $scheme;`.
+Un `location` qui relaie vers `http://127.0.0.1:8090` avec `proxy_set_header Host $http_host;`.
 On peut alors limiter le port aux connexions locales avec `HERMES_PORT=127.0.0.1:8090`.
+
+L'API considère une requête comme venant d'Hermès quand l'en-tête `Origin` du navigateur correspond
+à l'en-tête `Host` reçu : sinon elle la rejette en 403 (CORS). En HTTPS, il faudra donc ajuster cette
+vérification (en-têtes X-Forwarded-Proto / X-Forwarded-Port, ou APPLICATION_CORS_ALLOWEDORIGINS).
