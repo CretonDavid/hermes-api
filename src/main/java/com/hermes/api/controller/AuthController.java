@@ -40,4 +40,11 @@ public class AuthController {
     public ResponseEntity<LoginResponse> reactivate(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.reactivate(request));
     }
+
+    // Révoque la session : le refresh token ne pourra plus être utilisé
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@Valid @RequestBody RefreshRequest request) {
+        authService.logout(request);
+        return ResponseEntity.noContent().build();
+    }
 }

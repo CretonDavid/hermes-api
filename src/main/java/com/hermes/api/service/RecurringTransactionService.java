@@ -81,6 +81,25 @@ public class RecurringTransactionService {
         return transactionMapper.toResponse(find(id));
     }
 
+    /**
+     * Crée la récurrence puis génère aussitôt ses occurrences déjà échues, chacune dans sa propre
+     * transaction : une échéance en échec n'annule pas la création.
+     */
+    public RecurringTransactionResponse createAndGenerate(RecurringTransactionRequest request) {
+        Long id = Objects.requireNonNull(transactionTemplate.execute(status -> create(request).id()));
+        generateDueForUser(currentUser.id());
+        return Objects.requireNonNull(transactionTemplate.execute(status -> getById(id)));
+    }
+
+    /**
+     * Modifie la récurrence puis génère les occurrences devenues échues.
+     */
+    public RecurringTransactionResponse updateAndGenerate(Long id, RecurringTransactionRequest request) {
+        transactionTemplate.executeWithoutResult(status -> update(id, request));
+        generateDueForUser(currentUser.id());
+        return Objects.requireNonNull(transactionTemplate.execute(status -> getById(id)));
+    }
+
     @Transactional
     public RecurringTransactionResponse create(RecurringTransactionRequest request) {
         RecurringTransaction recurring = RecurringTransaction.builder()

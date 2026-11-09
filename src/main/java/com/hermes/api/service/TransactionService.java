@@ -10,6 +10,7 @@ import com.hermes.api.model.Category;
 import com.hermes.api.model.Transaction;
 import com.hermes.api.model.enums.TransactionDirection;
 import com.hermes.api.model.enums.TransactionStatus;
+import com.hermes.api.repository.LikePatterns;
 import com.hermes.api.repository.TransactionRepository;
 import com.hermes.api.repository.TransactionSpecifications;
 import com.hermes.api.utils.CurrentUser;
@@ -21,9 +22,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -31,6 +32,7 @@ import java.util.*;
 public class TransactionService {
 
     private static final int MAX_PAGE_SIZE = 500;
+    private static final int MAX_PAYEES = 50;
 
     private final TransactionRepository transactionRepository;
     private final AccountService accountService;
@@ -49,15 +51,8 @@ public class TransactionService {
 
     @Transactional(readOnly = true)
     public List<TransactionTotals> totals(TransactionFilter filter) {
-        Map<String, List<Transaction>> byCurrency = new TreeMap<>();
-        for (Transaction t : transactionRepository.findAll(TransactionSpecifications.matching(currentUser.id(), filter, categoryIds(filter)))) {
-            byCurrency.computeIfAbsent(t.getAccount().getCurrency().getCode(), code -> new ArrayList<>()).add(t);
-        }
-        return byCurrency.entrySet().stream().map(entry -> {
-            BigDecimal credits = sum(entry.getValue(), TransactionDirection.CREDIT);
-            BigDecimal debits = sum(entry.getValue(), TransactionDirection.DEBIT);
-            return new TransactionTotals(entry.getKey(), entry.getValue().size(), credits, debits, credits.subtract(debits));
-        }).toList();
+        return transactionRepository.totalsByCurrency(
+                TransactionSpecifications.matching(currentUser.id(), filter, categoryIds(filter)));
     }
 
     @Transactional
@@ -93,13 +88,6 @@ public class TransactionService {
             default -> new Sort.Order(order, "operationDate");
         };
         return Sort.by(primary, Sort.Order.desc("id"));
-    }
-
-    private static BigDecimal sum(List<Transaction> transactions, TransactionDirection direction) {
-        return transactions.stream()
-                .filter(t -> t.getDirection() == direction)
-                .map(Transaction::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     @Transactional(readOnly = true)
@@ -195,19 +183,21 @@ public class TransactionService {
     @Transactional(readOnly = true)
     public List<PayeeSuggestion> payees(String query, int limit) {
         UUID userId = currentUser.id();
-        String q = query == null ? "" : query.trim();
+        String pattern = LikePatterns.containsIgnoreCase(query == null ? "" : query);
         List<TransactionRepository.PayeeView> payees =
-                transactionRepository.findPayees(userId, q, PageRequest.of(0, Math.clamp(limit, 1, 50)));
+                transactionRepository.findPayees(userId, pattern, PageRequest.of(0, Math.clamp(limit, 1, MAX_PAYEES)));
+        if (payees.isEmpty()) {
+            return List.of();
+        }
 
         // Dernière catégorie utilisée pour chaque tiers, pour pré-remplir le formulaire
+        Set<String> keys = payees.stream().map(p -> p.getPayee().toLowerCase(Locale.ROOT)).collect(Collectors.toSet());
         Map<String, Long> lastCategory = new HashMap<>();
-        for (Transaction t : transactionRepository.findCategorizedByOwner(userId, PageRequest.of(0, 2000))) {
-            if (t.getPayee() != null) {
-                lastCategory.putIfAbsent(t.getPayee().toLowerCase(), t.getCategory().getId());
-            }
+        for (TransactionRepository.PayeeCategoryView row : transactionRepository.findCategoriesOfPayees(userId, keys)) {
+            lastCategory.putIfAbsent(row.getPayee().toLowerCase(Locale.ROOT), row.getCategoryId());
         }
         return payees.stream()
-                .map(p -> new PayeeSuggestion(p.getPayee(), p.getUsage(), lastCategory.get(p.getPayee().toLowerCase())))
+                .map(p -> new PayeeSuggestion(p.getPayee(), p.getUsage(), lastCategory.get(p.getPayee().toLowerCase(Locale.ROOT))))
                 .toList();
     }
 

@@ -1,7 +1,9 @@
 package com.hermes.api;
 
+import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.ResultActions;
 
 import java.util.List;
 
@@ -71,6 +73,65 @@ class AuthApiTest extends ApiTestSupport {
         mockMvc.perform(post("/auth/refresh").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refresh_token\":\"" + session.accessToken() + "\"}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void refreshTokenIsRotatedAndItsReuseRevokesEverySession() throws Exception {
+        Session session = newUser();
+        Session otherDevice = login(session.accountNumber());
+
+        String rotated = refresh(session.refreshToken())
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String newRefreshToken = JsonPath.read(rotated, "$.refresh_token");
+        assertThat(newRefreshToken).isNotEqualTo(session.refreshToken());
+
+        // L'ancien jeton a été remplacé : le présenter de nouveau trahit un vol
+        refresh(session.refreshToken()).andExpect(status().isUnauthorized());
+        refresh(newRefreshToken).andExpect(status().isUnauthorized());
+        refresh(otherDevice.refreshToken()).andExpect(status().isUnauthorized());
+
+        // Le numéro de compte permet toujours d'ouvrir une nouvelle session
+        Session again = login(session.accountNumber());
+        refresh(again.refreshToken()).andExpect(status().isOk());
+    }
+
+    @Test
+    void logoutRevokesOnlyThisSession() throws Exception {
+        Session session = newUser();
+        Session otherDevice = login(session.accountNumber());
+
+        mockMvc.perform(post("/auth/logout").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refresh_token\":\"" + session.refreshToken() + "\"}"))
+                .andExpect(status().isNoContent());
+        refresh(session.refreshToken()).andExpect(status().isUnauthorized());
+        refresh(otherDevice.refreshToken()).andExpect(status().isOk());
+
+        // Un jeton invalide est ignoré sans erreur
+        mockMvc.perform(post("/auth/logout").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refresh_token\":\"invalide\"}"))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void disablingTheAccountRevokesRefreshTokens() throws Exception {
+        Session session = newUser();
+        mockMvc.perform(as(session, post("/users/me/disable"))).andExpect(status().isNoContent());
+        refresh(session.refreshToken()).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void healthEndpointIsPublicWithoutDetails() throws Exception {
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(jsonPath("$.components").doesNotExist());
+        mockMvc.perform(get("/actuator/env")).andExpect(status().isUnauthorized());
+    }
+
+    private ResultActions refresh(String refreshToken) throws Exception {
+        return mockMvc.perform(post("/auth/refresh").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"refresh_token\":\"" + refreshToken + "\"}"));
     }
 
     @Test

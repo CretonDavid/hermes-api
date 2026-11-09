@@ -7,7 +7,6 @@ import com.hermes.api.dto.recurring.RecurringTransactionResponse;
 import com.hermes.api.dto.recurring.UpcomingOccurrenceResponse;
 import com.hermes.api.service.RecurringTransactionService;
 import com.hermes.api.service.ReimbursementService;
-import com.hermes.api.utils.CurrentUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -23,7 +22,6 @@ public class RecurringTransactionController {
 
     private final RecurringTransactionService recurringTransactionService;
     private final ReimbursementService reimbursementService;
-    private final CurrentUser currentUser;
 
     @GetMapping
     public ResponseEntity<List<RecurringTransactionResponse>> getAll() {
@@ -61,16 +59,12 @@ public class RecurringTransactionController {
     // Les occurrences déjà échues sont générées immédiatement
     @PostMapping
     public ResponseEntity<RecurringTransactionResponse> create(@Valid @RequestBody RecurringTransactionRequest request) {
-        RecurringTransactionResponse created = recurringTransactionService.create(request);
-        recurringTransactionService.generateDueForUser(currentUser.id());
-        return ResponseEntity.status(HttpStatus.CREATED).body(recurringTransactionService.getById(created.id()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(recurringTransactionService.createAndGenerate(request));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<RecurringTransactionResponse> update(@PathVariable Long id, @Valid @RequestBody RecurringTransactionRequest request) {
-        recurringTransactionService.update(id, request);
-        recurringTransactionService.generateDueForUser(currentUser.id());
-        return ResponseEntity.ok(recurringTransactionService.getById(id));
+        return ResponseEntity.ok(recurringTransactionService.updateAndGenerate(id, request));
     }
 
     @DeleteMapping("/{id}")

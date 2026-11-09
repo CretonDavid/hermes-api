@@ -14,11 +14,13 @@ import org.springframework.data.jpa.repository.Query;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface TransactionRepository extends JpaRepository<Transaction, Long>, JpaSpecificationExecutor<Transaction> {
+public interface TransactionRepository extends JpaRepository<Transaction, Long>, JpaSpecificationExecutor<Transaction>,
+        TransactionTotalsRepository {
 
     String SIGNED_AMOUNT = "(case when t.direction = com.hermes.api.model.enums.TransactionDirection.CREDIT then t.amount else -t.amount end)";
 
@@ -42,6 +44,12 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
         String getPayee();
 
         Long getUsage();
+    }
+
+    interface PayeeCategoryView {
+        String getPayee();
+
+        Long getCategoryId();
     }
 
     @EntityGraph(attributePaths = {"account", "account.currency", "category", "transferPeer", "transferPeer.account"})
@@ -88,10 +96,19 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
     @Query("""
             select t.payee as payee, count(t) as usage from Transaction t
             where t.account.owner.id = :ownerId and t.payee is not null and t.transferPeer is null
-              and lower(t.payee) like lower(concat('%', :query, '%'))
+              and lower(t.payee) like :pattern escape '\\'
             group by t.payee order by count(t) desc
             """)
-    List<PayeeView> findPayees(UUID ownerId, String query, Pageable pageable);
+    List<PayeeView> findPayees(UUID ownerId, String pattern, Pageable pageable);
+
+    // Catégories utilisées pour ces tiers (en minuscules), les plus récentes d'abord
+    @Query("""
+            select t.payee as payee, t.category.id as categoryId from Transaction t
+            where t.account.owner.id = :ownerId and t.transferPeer is null and t.category is not null
+              and lower(t.payee) in :payees
+            order by t.operationDate desc, t.id desc
+            """)
+    List<PayeeCategoryView> findCategoriesOfPayees(UUID ownerId, Collection<String> payees);
 
     // Opérations catégorisées d'un utilisateur, les plus récentes d'abord (suggestions de catégorie)
     @Query("""

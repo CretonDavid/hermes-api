@@ -33,13 +33,25 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant dans .env}
       # Les opérations récurrentes sont générées à 1 h, heure locale
       TZ: ${TZ:-Europe/Paris}
+    security_opt:
+      - no-new-privileges:true
+    # L'image ne contient ni curl ni wget : la sonde interroge /actuator/health en bash
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
 
   app:
     build: ${HERMES_APP_DIR:-../../hermes-app}
     image: hermes-app
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "${HERMES_PORT:-8090}:80"
 

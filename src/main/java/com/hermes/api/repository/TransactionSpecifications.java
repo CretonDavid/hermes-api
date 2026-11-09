@@ -65,11 +65,11 @@ public final class TransactionSpecifications {
                 predicates.add(cb.equal(root.get("status"), filter.status()));
             }
             if (filter.search() != null && !filter.search().isBlank()) {
-                String pattern = "%" + filter.search().trim().toLowerCase() + "%";
+                String pattern = LikePatterns.containsIgnoreCase(filter.search());
                 predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("label")), pattern),
-                        cb.like(cb.lower(cb.coalesce(root.get("payee"), "")), pattern),
-                        cb.like(cb.lower(cb.coalesce(root.get("notes"), "")), pattern)
+                        cb.like(cb.lower(root.get("label")), pattern, LikePatterns.ESCAPE),
+                        cb.like(cb.lower(cb.coalesce(root.get("payee"), "")), pattern, LikePatterns.ESCAPE),
+                        cb.like(cb.lower(cb.coalesce(root.get("notes"), "")), pattern, LikePatterns.ESCAPE)
                 ));
             }
             if (filter.minAmount() != null) {

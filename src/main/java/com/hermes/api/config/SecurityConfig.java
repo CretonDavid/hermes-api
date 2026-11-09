@@ -1,8 +1,10 @@
 package com.hermes.api.config;
 
+import com.hermes.api.utils.AuthRateLimitFilter;
 import com.hermes.api.utils.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -32,15 +34,21 @@ public class SecurityConfig {
             "/auth/login",
             "/auth/refresh",
             "/auth/reactivate",
+            "/auth/logout",
+            "/actuator/health",
             "/error"
     };
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final AuthRateLimitFilter authRateLimitFilter;
 
     @Value("${application.cors.allowed-origins}")
     private List<String> allowedOrigins;
 
+    // CSRF désactivé à dessein : l'API est sans état et authentifiée par un en-tête Authorization,
+    // jamais par un cookie, qu'un site tiers ne peut donc pas faire envoyer à l'insu de l'utilisateur
     @Bean
+    @SuppressWarnings("java:S4502")
     public SecurityFilterChain securityFilterChain(HttpSecurity http) {
         http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -55,9 +63,26 @@ public class SecurityConfig {
                 // 401 (et non 403) quand le token est absent ou expiré : le front tente alors un refresh
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .sessionManagement(session -> session.sessionCreationPolicy(STATELESS))
+                .addFilterBefore(authRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    // Les deux filtres ne s'exécutent que dans la chaîne de Spring Security, pas une seconde fois
+    // comme filtres de servlet
+    @Bean
+    public FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistration(JwtAuthenticationFilter filter) {
+        FilterRegistrationBean<JwtAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<AuthRateLimitFilter> rateLimitFilterRegistration(AuthRateLimitFilter filter) {
+        FilterRegistrationBean<AuthRateLimitFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     @Bean
