@@ -6,21 +6,38 @@ Stack : Java 26, Spring Boot 4.1, Spring Security (JWT), Spring Data JPA, Postgr
 
 ## Démarrage
 
-Prérequis : Java 26 et une base PostgreSQL `hermes-db` (identifiants dans `src/main/resources/application.properties`).
+Prérequis : Java 26 et une base PostgreSQL. Aucun secret n'est versionné : tout passe par des variables d'environnement.
+
+| Variable | Rôle | Par défaut |
+|---|---|---|
+| `JWT_SECRET` | Clé de signature des JWT, 32 octets minimum en Base64 (`openssl rand -base64 48`) | obligatoire |
+| `DB_PASSWORD` | Mot de passe PostgreSQL | obligatoire |
+| `DB_URL` | URL JDBC | `jdbc:postgresql://localhost:5432/hermes-db` |
+| `DB_USERNAME` | Utilisateur PostgreSQL | `postgres` |
+| `CORS_ALLOWED_ORIGINS` | Origines autorisées (développement) | `http://localhost:4200` |
 
 ```bash
-# Clé de signature des JWT : 32 octets minimum, encodés en Base64
-export JWT_SECRET=$(openssl rand -base64 32)
+export JWT_SECRET=$(openssl rand -base64 48)
+export DB_PASSWORD=...
 ./mvnw spring-boot:run
 ```
 
-L'API écoute sur `http://localhost:8080`. Le schéma est créé par Hibernate (`ddl-auto=update`) et les devises courantes sont insérées au démarrage.
+L'API écoute sur `http://localhost:8080` ; `GET /actuator/health` donne son état (sans détail). Le schéma est créé par Hibernate (`ddl-auto=update`) et les devises courantes sont insérées au démarrage.
 
-Tests (base H2 en mémoire, aucune dépendance externe) :
+## Qualité
 
 ```bash
-./mvnw test
+./mvnw verify      # compilation (avertissements javac), tests (base H2) et couverture JaCoCo
 ```
+
+Le rapport de couverture est produit dans `target/site/jacoco` (format XML lisible par SonarQube). La CI GitHub Actions lance `verify` à chaque push ; Dependabot propose chaque semaine les mises à jour des dépendances Maven, des actions et de l'image Docker.
+
+## Sécurité
+
+- Numéro de compte haché en Argon2 ; temps de réponse identique que le préfixe existe ou non.
+- Access token de 15 min ; refresh token de 7 jours, enregistré côté serveur et **renouvelé à chaque utilisation**. Réutiliser un refresh token déjà remplacé révoque toutes les sessions de l'utilisateur ; déconnexion, désactivation et suppression du compte révoquent aussi les sessions.
+- Limitation par adresse IP des routes publiques (`application.security.rate-limit.*`) : 10 connexions par minute, 5 inscriptions par heure, 30 rafraîchissements par minute. Les échecs de connexion sont journalisés avec l'adresse du client.
+- Derrière le proxy, l'adresse du client est lue dans `X-Forwarded-For`, que nginx écrase pour qu'elle ne puisse pas être falsifiée.
 
 ## Authentification
 
@@ -32,6 +49,7 @@ Pas d'e-mail ni de mot de passe : `POST /auth/register` génère un **numéro de
 | POST | `/auth/login` | `{accountNumber}` → `{access_token, refresh_token}` |
 | POST | `/auth/refresh` | `{refresh_token}` → nouvelle paire de tokens |
 | POST | `/auth/reactivate` | Réactive un compte désactivé |
+| POST | `/auth/logout` | `{refresh_token}` : révoque la session |
 | GET / PATCH | `/users/me` | Profil, devise de référence |
 | POST | `/users/me/disable` | Désactive le compte (données conservées) |
 | DELETE | `/users/me` | `{accountNumber}` : suppression définitive de toutes les données |

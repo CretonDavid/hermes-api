@@ -1,0 +1,48 @@
+package com.hermes.api.dto.recurring;
+
+import com.hermes.api.model.enums.PaymentMethod;
+import com.hermes.api.model.enums.RecurrenceFrequency;
+import com.hermes.api.model.enums.TransactionDirection;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+
+/**
+ * Si targetAccountId est renseigné, la récurrence est un virement de accountId vers targetAccountId
+ * et direction est ignorée. Une dépense peut être remboursée en partie par des tiers (reimbursementPayers).
+ */
+public record RecurringTransactionRequest(
+        @NotNull(message = "Le compte bancaire est obligatoire")
+        Long accountId,
+        Long targetAccountId,
+        TransactionDirection direction,
+        @NotNull(message = "Le montant est obligatoire")
+        @DecimalMin(value = "0", inclusive = false, message = "Le montant doit être positif")
+        @Digits(integer = 15, fraction = 2, message = "Le montant doit avoir au plus 2 décimales")
+        BigDecimal amount,
+        @DecimalMin(value = "0", inclusive = false, message = "Le montant crédité doit être positif")
+        @Digits(integer = 15, fraction = 2, message = "Le montant crédité doit avoir au plus 2 décimales")
+        BigDecimal targetAmount,
+        @NotBlank(message = "Le libellé est obligatoire")
+        @Size(max = 255, message = "Le libellé ne doit pas dépasser 255 caractères")
+        String label,
+        @Size(max = 255, message = "Le tiers ne doit pas dépasser 255 caractères")
+        String payee,
+        Long categoryId,
+        PaymentMethod paymentMethod,
+        @NotNull(message = "La fréquence est obligatoire")
+        RecurrenceFrequency frequency,
+        @Min(value = 1, message = "L'intervalle doit être au moins de 1")
+        @Max(value = 365, message = "L'intervalle ne doit pas dépasser 365")
+        int interval,
+        @NotNull(message = "La date de début est obligatoire")
+        LocalDate startDate,
+        LocalDate endDate,
+        boolean active,
+        @Size(max = 20, message = "Une dépense ne peut pas être remboursée par plus de 20 tiers")
+        List<@Valid ReimbursementPayerRequest> reimbursementPayers
+) {
+}
