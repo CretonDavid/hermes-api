@@ -69,10 +69,14 @@ public class ImportService {
         List<String> warnings = new ArrayList<>();
         List<ParsedRow> parsed = new ArrayList<>();
         for (OfxReader.OfxTransaction t : OfxReader.parse(content)) {
+            String label = firstNonBlank(t.name(), t.memo(), t.type(), "Opération");
+            if (t.amount() == null) {
+                warnings.add("Opération « " + label + " » du " + t.datePosted() + " ignorée : montant illisible");
+                continue;
+            }
             if (t.amount().signum() == 0) {
                 continue;
             }
-            String label = firstNonBlank(t.name(), t.memo(), t.type(), "Opération");
             String notes = t.memo() != null && !t.memo().equalsIgnoreCase(t.name()) ? t.memo() : null;
             // DTUSER est la date de l'opération, DTPOSTED sa date de comptabilisation par la banque
             LocalDate operationDate = t.dateUser() != null ? t.dateUser() : t.datePosted();
@@ -287,7 +291,7 @@ public class ImportService {
             String base = row.date() + "|" + row.amount().stripTrailingZeros().toPlainString() + "|" + LabelNormalizer.normalize(row.label());
             int occurrence = occurrences.merge(base, 1, Integer::sum);
             rows.set(i, new ParsedRow(row.date(), row.valueDate(), row.label(), row.payee(), row.notes(), row.amount(),
-                    "hash:" + sha1(base + "|" + occurrence)));
+                    "hash:" + fingerprint(base + "|" + occurrence)));
         }
     }
 
@@ -454,7 +458,10 @@ public class ImportService {
         }
     }
 
-    private static String sha1(String value) {
+    // Empreinte de dédoublonnage, sans rôle de sécurité : SHA-1 est conservé car les empreintes déjà
+    // enregistrées doivent rester identiques pour reconnaître les lignes d'un relevé réimporté
+    @SuppressWarnings("java:S4790")
+    private static String fingerprint(String value) {
         try {
             byte[] hash = MessageDigest.getInstance("SHA-1").digest(value.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);

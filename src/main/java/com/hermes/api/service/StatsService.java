@@ -242,7 +242,7 @@ public class StatsService {
             }
             String name = t.getPayee() != null ? t.getPayee() : t.getLabel();
             String key = t.getPayee() != null
-                    ? t.getPayee().trim().toLowerCase()
+                    ? t.getPayee().trim().toLowerCase(Locale.ROOT)
                     : "label:" + com.hermes.api.service.importing.LabelNormalizer.key(t.getLabel());
             names.putIfAbsent(key, name);
             amounts.merge(key, contribution(t, CategoryType.EXPENSE, ctx.convert(t)), BigDecimal::add);

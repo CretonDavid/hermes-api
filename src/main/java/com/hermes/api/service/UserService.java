@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -27,7 +28,8 @@ public class UserService {
 
     public static final String DEFAULT_REFERENCE_CURRENCY = "EUR";
 
-    private static final Pattern ACCOUNT_NUMBER_PATTERN = Pattern.compile("\\d{30}");
+    private static final int ACCOUNT_NUMBER_LENGTH = 30;
+    private static final Pattern ACCOUNT_NUMBER_PATTERN = Pattern.compile("\\d{" + ACCOUNT_NUMBER_LENGTH + "}");
     private static final int KEY_LENGTH = 6;
 
     private final AccountNumberGenerator accountNumberGenerator;
@@ -46,6 +48,11 @@ public class UserService {
     private final CategoryRepository categoryRepository;
     private final ExchangeRateRepository exchangeRateRepository;
     private final AccountTypeRepository accountTypeRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
+
+    // Hash d'un numéro fictif, vérifié quand aucun compte ne correspond : le temps de réponse ne
+    // révèle pas quels préfixes de numéro existent
+    private volatile String decoyHash;
 
     /**
      * Crée un utilisateur et renvoie son numéro de compte en clair. Seul son hash est conservé :
@@ -79,13 +86,13 @@ public class UserService {
             throw new InvalidCredentialsException("Numéro de compte invalide");
         }
 
-        User user = userRepository.findByLookupKey(extractKey(accountNumber))
-                .orElseThrow(() -> new InvalidCredentialsException("Numéro de compte invalide"));
-
-        if (!passwordEncoder.matches(accountNumber, user.getAccountNumberHash())) {
+        Optional<User> user = userRepository.findByLookupKey(extractKey(accountNumber));
+        String hash = user.map(User::getAccountNumberHash).orElseGet(this::decoyHash);
+        boolean matches = passwordEncoder.matches(accountNumber, hash);
+        if (user.isEmpty() || !matches) {
             throw new InvalidCredentialsException("Numéro de compte invalide");
         }
-        return user;
+        return user.get();
     }
 
     @Transactional
@@ -116,6 +123,7 @@ public class UserService {
     public void disable() {
         User user = findCurrentUser();
         user.setEnabled(false);
+        refreshTokenRepository.deleteByUserId(user.getId());
         log.info("User {} disabled", user.getId());
     }
 
@@ -130,6 +138,7 @@ public class UserService {
             throw new InvalidCredentialsException("Numéro de compte invalide");
         }
 
+        refreshTokenRepository.deleteByUserId(userId);
         transactionRepository.unlinkAllByOwnerId(userId);
         transactionRepository.deleteByOwnerId(userId);
         reconciliationRepository.deleteByOwnerId(userId);
@@ -168,6 +177,15 @@ public class UserService {
             accountNumber = accountNumberGenerator.generate();
         } while (userRepository.existsByLookupKey(extractKey(accountNumber)));
         return accountNumber;
+    }
+
+    private String decoyHash() {
+        String hash = decoyHash;
+        if (hash == null) {
+            hash = passwordEncoder.encode("0".repeat(ACCOUNT_NUMBER_LENGTH));
+            decoyHash = hash;
+        }
+        return hash;
     }
 
     // La clé correspond aux 6 premiers chiffres du numéro de compte

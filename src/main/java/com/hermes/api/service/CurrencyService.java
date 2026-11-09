@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Slf4j
@@ -44,7 +45,7 @@ public class CurrencyService {
     @Transactional
     public CurrencyResponse create(CurrencyRequest request) {
         UUID userId = currentUser.id();
-        String code = request.code().trim().toUpperCase();
+        String code = request.code().trim().toUpperCase(Locale.ROOT);
         if (!currencyRepository.findAccessibleByCode(code, userId).isEmpty()) {
             throw new ResourceAlreadyExistsException("La devise " + code + " existe déjà");
         }
@@ -66,7 +67,7 @@ public class CurrencyService {
         UUID userId = currentUser.id();
         Currency existing = findOwned(id, userId);
 
-        String code = request.code().trim().toUpperCase();
+        String code = request.code().trim().toUpperCase(Locale.ROOT);
         boolean conflict = currencyRepository.findAccessibleByCode(code, userId).stream()
                 .anyMatch(c -> !c.getId().equals(id));
         if (conflict) {

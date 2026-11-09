@@ -2,7 +2,6 @@ package com.hermes.api.service;
 
 import com.hermes.api.config.JwtProperties;
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import lombok.RequiredArgsConstructor;
@@ -12,67 +11,85 @@ import javax.crypto.SecretKey;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.Optional;
 import java.util.UUID;
-
 
 @Service
 @RequiredArgsConstructor
 public class JwtService {
 
     private static final String CLAIM_TYPE = "type";
-    private static final String TOKEN_TYPE_ACCESS = "access";
-    private static final String TOKEN_TYPE_REFRESH = "refresh";
+
+    public enum TokenType {
+        ACCESS("access"),
+        REFRESH("refresh");
+
+        private final String claim;
+
+        TokenType(String claim) {
+            this.claim = claim;
+        }
+    }
+
+    /**
+     * Contenu vérifié d'un jeton : utilisateur, identifiant unique (jti) et expiration.
+     */
+    public record VerifiedToken(UUID userId, UUID tokenId, Instant expiresAt) {
+    }
+
+    /**
+     * Jeton signé, avec son identifiant et son expiration pour l'enregistrer côté serveur.
+     */
+    public record IssuedToken(String value, UUID tokenId, Instant expiresAt) {
+    }
 
     private final SecretKey secretKey;
     private final JwtProperties jwtProperties;
 
-    public String generateAccessToken(UUID userId) {
-        return buildToken(userId, TOKEN_TYPE_ACCESS, jwtProperties.accessTokenTtl());
+    public IssuedToken generateAccessToken(UUID userId) {
+        return buildToken(userId, TokenType.ACCESS, jwtProperties.accessTokenTtl());
     }
 
-    public String generateRefreshToken(UUID userId) {
-        return buildToken(userId, TOKEN_TYPE_REFRESH, jwtProperties.refreshTokenTtl());
+    public IssuedToken generateRefreshToken(UUID userId) {
+        return buildToken(userId, TokenType.REFRESH, jwtProperties.refreshTokenTtl());
     }
 
-    private String buildToken(UUID userId, String type, Duration ttl) {
+    /**
+     * Vérifie la signature, l'émetteur, l'expiration et le type du jeton, en un seul décodage.
+     */
+    public Optional<VerifiedToken> verify(String token, TokenType expectedType) {
+        try {
+            Claims claims = Jwts.parser()
+                    .verifyWith(secretKey)
+                    .requireIssuer(jwtProperties.issuer())
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            if (!expectedType.claim.equals(claims.get(CLAIM_TYPE, String.class))) {
+                return Optional.empty();
+            }
+            return Optional.of(new VerifiedToken(
+                    UUID.fromString(claims.getSubject()),
+                    UUID.fromString(claims.getId()),
+                    claims.getExpiration().toInstant()));
+        } catch (JwtException | IllegalArgumentException e) {
+            return Optional.empty();
+        }
+    }
+
+    private IssuedToken buildToken(UUID userId, TokenType type, Duration ttl) {
         Instant now = Instant.now();
-        return Jwts.builder()
+        Instant expiresAt = now.plus(ttl);
+        UUID tokenId = UUID.randomUUID();
+        String value = Jwts.builder()
                 .subject(userId.toString())
-                .id(UUID.randomUUID().toString())
+                .id(tokenId.toString())
                 .issuer(jwtProperties.issuer())
-                .claim(CLAIM_TYPE, type)
+                .claim(CLAIM_TYPE, type.claim)
                 .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plus(ttl)))
+                .expiration(Date.from(expiresAt))
                 .signWith(secretKey, Jwts.SIG.HS256)
                 .compact();
-    }
-
-    public Jws<Claims> parse(String token) {
-        return Jwts.parser()
-                .verifyWith(secretKey)
-                .requireIssuer(jwtProperties.issuer())
-                .build()
-                .parseSignedClaims(token);
-    }
-
-    public UUID extractUserId(String token) {
-        return UUID.fromString(parse(token).getPayload().getSubject());
-    }
-
-    public boolean isAccessToken(String token) {
-        return TOKEN_TYPE_ACCESS.equals(parse(token).getPayload().get(CLAIM_TYPE, String.class));
-    }
-
-    public boolean isRefreshToken(String token) {
-        return TOKEN_TYPE_REFRESH.equals(parse(token).getPayload().get(CLAIM_TYPE, String.class));
-    }
-
-    public boolean isValid(String token) {
-        try {
-            parse(token);
-            return true;
-        } catch (JwtException | IllegalArgumentException e) {
-            return false;
-        }
+        return new IssuedToken(value, tokenId, expiresAt);
     }
 }

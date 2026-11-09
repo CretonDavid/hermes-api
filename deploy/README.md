@@ -36,6 +36,9 @@ docker image prune -f           # supprime les anciennes images
 
 Les données sont conservées dans le volume `hermes_db-data`.
 
+L'API dispose d'une sonde de santé (`/actuator/health`) : le front ne démarre qu'une fois l'API
+prête, et `docker compose ps` affiche `healthy` quand tout va bien.
+
 ## Suivi
 
 ```bash
