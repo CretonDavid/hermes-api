@@ -24,6 +24,16 @@ démarrage : il suffit de créer un compte sur l'écran d'inscription.
 
 Si le pare-feu `ufw` est actif : `sudo ufw allow 8090/tcp` (à limiter au réseau local ou au VPN).
 
+## Branche déployée
+
+Le serveur suit la branche `master` des deux dépôts, qui ne contient que les versions publiées
+(`develop` sert au développement). Pour un serveur installé sur une autre branche :
+
+```bash
+cd ~/hermes
+git -C hermes-api checkout master && git -C hermes-app checkout master
+```
+
 ## Mise à jour
 
 ```bash
