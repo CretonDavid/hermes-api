@@ -8,7 +8,8 @@ import java.time.LocalDate;
 /**
  * balance : solde à date (opérations jusqu'à aujourd'hui),
  * forecastBalance : solde prévisionnel (toutes les opérations, y compris futures),
- * clearedBalance : solde pointé (opérations pointées ou rapprochées).
+ * clearedBalance : solde pointé (opérations pointées ou rapprochées),
+ * ceiling : plafond de versements, null si le compte bancaire n'en a pas.
  */
 public record AccountResponse(
         Long id,
@@ -21,6 +22,7 @@ public record AccountResponse(
         BigDecimal balance,
         BigDecimal forecastBalance,
         BigDecimal clearedBalance,
+        BigDecimal ceiling,
         LocalDate openingDate,
         boolean closed
 ) {

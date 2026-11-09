@@ -46,6 +46,10 @@ public class Account {
     @Column(name = "initial_balance", nullable = false, precision = 19, scale = 2)
     private BigDecimal initialBalance;
 
+    // Plafond de versements (Livret A, LDDS...) : null si le compte bancaire n'en a pas
+    @Column(name = "ceiling", precision = 19, scale = 2)
+    private BigDecimal ceiling;
+
     @Column(name = "opening_date", nullable = false)
     private LocalDate openingDate;
 
