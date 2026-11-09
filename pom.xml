@@ -16,7 +16,7 @@
         <java.version>26</java.version>
         <jjwt.version>0.13.0</jjwt.version>
         <bouncycastle.version>1.85.2</bouncycastle.version>
-        <jacoco.version>0.8.14</jacoco.version>
+        <jacoco.version>0.8.16</jacoco.version>
     </properties>
     <dependencies>
         <dependency>
