@@ -84,7 +84,14 @@ public final class TransactionSpecifications {
             }
             if (filter.search() != null && !filter.search().isBlank()) {
                 String pattern = LikePatterns.containsIgnoreCase(filter.search());
+                // Le libellé d'une ligne de ventilation est aussi recherché
+                Subquery<Long> splitLabel = query.subquery(Long.class);
+                Root<TransactionSplit> s = splitLabel.from(TransactionSplit.class);
+                splitLabel.select(s.get("id")).where(
+                        cb.equal(s.get("transaction"), root),
+                        cb.like(cb.lower(cb.coalesce(s.get("label"), "")), pattern, LikePatterns.ESCAPE));
                 predicates.add(cb.or(
+                        cb.exists(splitLabel),
                         cb.like(cb.lower(root.get("label")), pattern, LikePatterns.ESCAPE),
                         cb.like(cb.lower(cb.coalesce(root.get("payee"), "")), pattern, LikePatterns.ESCAPE),
                         cb.like(cb.lower(cb.coalesce(root.get("notes"), "")), pattern, LikePatterns.ESCAPE)

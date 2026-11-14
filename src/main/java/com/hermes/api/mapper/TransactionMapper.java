@@ -45,7 +45,7 @@ public class TransactionMapper {
                 entity.getNotes(),
                 categoryMapper.toSummary(entity.getCategory()),
                 entity.getSplits().stream()
-                        .map(s -> new SplitSummary(categoryMapper.toSummary(s.getCategory()), s.getAmount()))
+                        .map(s -> new SplitSummary(categoryMapper.toSummary(s.getCategory()), s.getLabel(), s.getAmount()))
                         .toList(),
                 matchedAmount,
                 entity.getPaymentMethod(),

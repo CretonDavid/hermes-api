@@ -22,7 +22,9 @@ class TransactionSplitApiTest extends ApiTestSupport {
             if (!splits.isEmpty()) {
                 splits.append(',');
             }
+            // La première ligne porte un libellé
             splits.append("{\"categoryId\":").append(categoryAndCents[i])
+                    .append(i == 0 ? ",\"label\":\" Lessive \"" : "")
                     .append(",\"amount\":").append(categoryAndCents[i + 1] / 100.0).append('}');
         }
         return "{\"accountId\":" + account + ",\"direction\":\"DEBIT\",\"amount\":" + amount
@@ -41,8 +43,15 @@ class TransactionSplitApiTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.category").doesNotExist())
                 .andExpect(jsonPath("$.splits.length()").value(2))
                 .andExpect(jsonPath("$.splits[0].category.name").value("Courses"))
+                .andExpect(jsonPath("$.splits[0].label").value("Lessive"))
                 .andExpect(jsonPath("$.splits[0].amount").value(85.0))
+                .andExpect(jsonPath("$.splits[1].label").doesNotExist())
                 .andExpect(jsonPath("$.splits[1].amount").value(35.0));
+
+        // Le libellé d'une ligne est recherché comme celui de l'opération
+        mockMvc.perform(as(s, get("/transactions")).param("search", "lessiv"))
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].id").value((int) id));
 
         mockMvc.perform(as(s, post("/transactions")).content(body(account, "120", "2026-04-02", groceries, 8500, home, 3000)))
                 .andExpect(status().isBadRequest());

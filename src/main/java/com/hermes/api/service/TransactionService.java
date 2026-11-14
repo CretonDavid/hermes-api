@@ -258,6 +258,7 @@ public class TransactionService {
             transaction.getSplits().add(TransactionSplit.builder()
                     .transaction(transaction)
                     .category(categoryService.find(split.categoryId()))
+                    .label(AccountService.blankToNull(split.label()))
                     .amount(split.amount())
                     .build());
         }

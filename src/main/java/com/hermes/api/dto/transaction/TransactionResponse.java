@@ -44,7 +44,7 @@ public record TransactionResponse(
     }
 
     // category est null pour une part dont la catégorie a été supprimée
-    public record SplitSummary(CategorySummary category, BigDecimal amount) {
+    public record SplitSummary(CategorySummary category, String label, BigDecimal amount) {
     }
 
     public record TransferSummary(Long peerTransactionId, Long accountId, String accountName) {

@@ -35,6 +35,10 @@ public class TransactionSplit {
     @JoinColumn(name = "category_id")
     private Category category;
 
+    // Libellé facultatif de la ligne (« lessive » sur la ligne Maison par exemple)
+    @Column(name = "label")
+    private String label;
+
     // Toujours positif, le sens est celui de l'opération
     @Column(name = "amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal amount;
