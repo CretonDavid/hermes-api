@@ -5,6 +5,7 @@ import com.hermes.api.exception.BadRequestException;
 import com.hermes.api.exception.ResourceNotFoundException;
 import com.hermes.api.model.*;
 import com.hermes.api.model.enums.TransactionDirection;
+import com.hermes.api.repository.GoalAdjustmentRepository;
 import com.hermes.api.repository.GoalAllocationRepository;
 import com.hermes.api.repository.SavingsGoalRepository;
 import com.hermes.api.repository.TransactionRepository;
@@ -39,6 +40,7 @@ public class GoalService {
 
     private final SavingsGoalRepository goalRepository;
     private final GoalAllocationRepository allocationRepository;
+    private final GoalAdjustmentRepository adjustmentRepository;
     private final TransactionRepository transactionRepository;
     private final AccountService accountService;
     private final CurrentUser currentUser;
@@ -119,8 +121,55 @@ public class GoalService {
     public void delete(Long id) {
         SavingsGoal goal = find(id);
         allocationRepository.deleteByGoalId(goal.getId());
+        adjustmentRepository.deleteByGoalId(goal.getId());
         goalRepository.delete(goalRepository.getReferenceById(goal.getId()));
         log.info("Savings goal {} deleted", id);
+    }
+
+    // ---------- Argent libre du compte ----------
+
+    /**
+     * Affecte de l'argent libre du compte au budget (montant positif), sans dépasser ce qui est libre
+     * ni ce qu'il manque au budget, ou rend libre une partie du budget (montant négatif).
+     */
+    @Transactional
+    public GoalResponse adjust(Long id, GoalAdjustmentRequest request) {
+        SavingsGoal goal = find(id);
+        if (goal.isUsed()) {
+            throw new BadRequestException("Ce budget spécial est déjà utilisé");
+        }
+        if (request.amount().signum() == 0) {
+            throw new BadRequestException("Le montant doit être différent de 0");
+        }
+        Account account = goal.getAccount();
+        String currency = " " + account.getCurrency().getCode();
+        AccountState state = replay(account, null);
+        BigDecimal saved = state.saved(goal.getId());
+        if (request.amount().signum() > 0) {
+            BigDecimal free = state.balance().max(BigDecimal.ZERO).subtract(state.total()).max(BigDecimal.ZERO);
+            BigDecimal missing = goal.getTargetAmount().subtract(saved).max(BigDecimal.ZERO);
+            if (missing.signum() == 0) {
+                throw new BadRequestException("Le budget spécial " + goal.getName() + " a atteint son objectif : il est verrouillé");
+            }
+            if (request.amount().compareTo(free) > 0) {
+                throw new BadRequestException("Il n'y a que " + free.toPlainString() + currency + " de libres sur " + account.getName());
+            }
+            if (request.amount().compareTo(missing) > 0) {
+                throw new BadRequestException("Il ne manque que " + missing.toPlainString() + currency
+                        + " pour atteindre l'objectif de " + goal.getName());
+            }
+        } else if (request.amount().negate().compareTo(saved) > 0) {
+            throw new BadRequestException("Le budget spécial " + goal.getName() + " n'a que " + saved.toPlainString()
+                    + currency + " de côté");
+        }
+
+        adjustmentRepository.save(GoalAdjustment.builder()
+                .goal(goal)
+                .date(LocalDate.now())
+                .amount(request.amount())
+                .createdAt(LocalDateTime.now())
+                .build());
+        return toResponse(goal, replay(account, null));
     }
 
     // ---------- Affectation des crédits ----------
@@ -176,9 +225,6 @@ public class GoalService {
 
     // ---------- Calcul ----------
 
-    private record GoalState(BigDecimal saved, BigDecimal added, BigDecimal usedAmount) {
-    }
-
     /**
      * État d'un compte aujourd'hui : solde et montant de chaque budget spécial.
      */
@@ -194,9 +240,10 @@ public class GoalService {
         }
     }
 
-    private enum Kind {START, CREDIT, RELEASE, DEBIT}
+    private enum Kind {START, CREDIT, ADJUST, RELEASE, DEBIT}
 
-    private record Event(LocalDate date, Kind kind, long order, SavingsGoal goal, Transaction transaction) {
+    private record Event(LocalDate date, Kind kind, long order, SavingsGoal goal, Transaction transaction,
+                         GoalAdjustment adjustment) {
     }
 
     /**
@@ -208,16 +255,22 @@ public class GoalService {
         LocalDate today = LocalDate.now();
         List<Event> events = new ArrayList<>();
         for (SavingsGoal goal : goalRepository.findByAccountId(account.getId())) {
-            events.add(new Event(goal.getStartDate(), Kind.START, goal.getId(), goal, null));
+            events.add(new Event(goal.getStartDate(), Kind.START, goal.getId(), goal, null, null));
             if (goal.getUsedDate() != null && !goal.getUsedDate().isAfter(today)) {
-                events.add(new Event(goal.getUsedDate(), Kind.RELEASE, goal.getId(), goal, null));
+                events.add(new Event(goal.getUsedDate(), Kind.RELEASE, goal.getId(), goal, null, null));
             }
         }
         for (Transaction t : transactionRepository.findForGoals(account.getId(), today)) {
             Kind kind = t.getDirection() == TransactionDirection.CREDIT ? Kind.CREDIT : Kind.DEBIT;
-            events.add(new Event(t.getOperationDate(), kind, t.getId(), null, t));
+            events.add(new Event(t.getOperationDate(), kind, t.getId(), null, t, null));
         }
-        // Dans une journée : montants de départ, crédits, libérations, puis retraits
+        for (GoalAdjustment adjustment : adjustmentRepository.findByAccountId(account.getId())) {
+            if (!adjustment.getDate().isAfter(today)) {
+                events.add(new Event(adjustment.getDate(), Kind.ADJUST, adjustment.getId(), adjustment.getGoal(), null,
+                        adjustment));
+            }
+        }
+        // Dans une journée : montants de départ, crédits, mouvements d'argent libre, libérations, puis retraits
         events.sort(Comparator.comparing(Event::date).thenComparing(Event::kind).thenComparingLong(Event::order));
 
         BigDecimal balance = account.getInitialBalance();
@@ -235,6 +288,16 @@ public class GoalService {
                 case START -> {
                     if (!released.contains(event.goal().getId())) {
                         add(active, added, event.goal().getId(), event.goal().getInitialAmount());
+                    }
+                }
+                case ADJUST -> {
+                    Long goalId = event.goal().getId();
+                    if (!released.contains(goalId)) {
+                        add(active, added, goalId, event.adjustment().getAmount());
+                        // Un budget réduit entre-temps par un retrait ne descend pas sous zéro
+                        if (active.get(goalId).signum() < 0) {
+                            active.put(goalId, BigDecimal.ZERO);
+                        }
                     }
                 }
                 case CREDIT, DEBIT -> {

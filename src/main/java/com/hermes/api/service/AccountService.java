@@ -11,6 +11,7 @@ import com.hermes.api.repository.RecurringTransactionRepository;
 import com.hermes.api.repository.ReimbursementPayerRepository;
 import com.hermes.api.repository.TransactionRepository;
 import com.hermes.api.repository.TransactionSplitRepository;
+import com.hermes.api.repository.GoalAdjustmentRepository;
 import com.hermes.api.repository.GoalAllocationRepository;
 import com.hermes.api.repository.SavingsGoalRepository;
 import com.hermes.api.repository.TransactionRepository.AccountBalanceView;
@@ -38,6 +39,7 @@ public class AccountService {
     private final TransactionRepository transactionRepository;
     private final TransactionSplitRepository transactionSplitRepository;
     private final GoalAllocationRepository goalAllocationRepository;
+    private final GoalAdjustmentRepository goalAdjustmentRepository;
     private final SavingsGoalRepository savingsGoalRepository;
     private final ReconciliationRepository reconciliationRepository;
     private final RecurringTransactionRepository recurringTransactionRepository;
@@ -96,6 +98,7 @@ public class AccountService {
         transactionRepository.unlinkTransfersOfAccount(id);
         transactionRepository.detachRecurringOfAccount(id);
         transactionRepository.detachReimbursementsOfAccount(id);
+        goalAdjustmentRepository.deleteByAccountId(id);
         goalAllocationRepository.deleteByAccountId(id);
         savingsGoalRepository.deleteByAccountId(id);
         transactionSplitRepository.deleteByAccountId(id);

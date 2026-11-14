@@ -1,5 +1,6 @@
 package com.hermes.api.controller;
 
+import com.hermes.api.dto.goal.GoalAdjustmentRequest;
 import com.hermes.api.dto.goal.GoalRequest;
 import com.hermes.api.dto.goal.GoalResponse;
 import com.hermes.api.dto.goal.GoalUpdateRequest;
@@ -44,6 +45,12 @@ public class GoalController {
     @PostMapping("/{id}/restore")
     public ResponseEntity<GoalResponse> restore(@PathVariable Long id) {
         return ResponseEntity.ok(goalService.restore(id));
+    }
+
+    // Montant positif : argent libre du compte affecté au budget ; négatif : rendu libre
+    @PostMapping("/{id}/adjust")
+    public ResponseEntity<GoalResponse> adjust(@PathVariable Long id, @Valid @RequestBody GoalAdjustmentRequest request) {
+        return ResponseEntity.ok(goalService.adjust(id, request));
     }
 
     @DeleteMapping("/{id}")

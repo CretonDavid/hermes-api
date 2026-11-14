@@ -43,6 +43,7 @@ public class UserService {
     private final TransactionRepository transactionRepository;
     private final TransactionSplitRepository transactionSplitRepository;
     private final GoalAllocationRepository goalAllocationRepository;
+    private final GoalAdjustmentRepository goalAdjustmentRepository;
     private final SavingsGoalRepository savingsGoalRepository;
     private final BudgetEnvelopeRepository budgetEnvelopeRepository;
     private final ReconciliationRepository reconciliationRepository;
@@ -144,6 +145,7 @@ public class UserService {
 
         refreshTokenRepository.deleteByUserId(userId);
         transactionRepository.unlinkAllByOwnerId(userId);
+        goalAdjustmentRepository.deleteByOwnerId(userId);
         goalAllocationRepository.deleteByOwnerId(userId);
         savingsGoalRepository.deleteByOwnerId(userId);
         transactionSplitRepository.deleteByOwnerId(userId);

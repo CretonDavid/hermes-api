@@ -111,6 +111,38 @@ class GoalApiTest extends ApiTestSupport {
     }
 
     @Test
+    void freeMoneyOfTheAccountCanBeMovedIntoAndOutOfAGoal() throws Exception {
+        Session s = newUser();
+        long livret = account(s, "Livret A", accountType(s, "Livret", true), eurId(s), "1000");
+        long moto = goal(s, "Moto", livret, "1500", "200");
+        goal(s, "Parachute", livret, "1000", "200");
+        String adjust = "{\"amount\":%s}";
+
+        // 600 € libres : on en affecte 500 à la moto
+        mockMvc.perform(as(s, post("/goals/" + moto + "/adjust")).content(adjust.formatted("500")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.savedAmount").value(700.0));
+        // Plus que l'argent libre (100 €) : refusé
+        mockMvc.perform(as(s, post("/goals/" + moto + "/adjust")).content(adjust.formatted("200")))
+                .andExpect(status().isBadRequest());
+
+        // On rend 300 € libres, mais pas plus que ce que le budget a de côté
+        mockMvc.perform(as(s, post("/goals/" + moto + "/adjust")).content(adjust.formatted("-300")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.savedAmount").value(400.0))
+                .andExpect(jsonPath("$.withdrawn").value(0.0));
+        mockMvc.perform(as(s, post("/goals/" + moto + "/adjust")).content(adjust.formatted("-500")))
+                .andExpect(status().isBadRequest());
+
+        // Pas plus que ce qu'il manque pour l'objectif
+        mockMvc.perform(as(s, post("/goals/" + moto + "/adjust")).content(adjust.formatted("400")))
+                .andExpect(status().isOk());
+        mockMvc.perform(as(s, get("/goals")))
+                .andExpect(jsonPath("$[0].savedAmount").value(800.0))
+                .andExpect(jsonPath("$[1].savedAmount").value(200.0));
+    }
+
+    @Test
     void initialAmountCannotExceedWhatIsFreeOnTheAccount() throws Exception {
         Session s = newUser();
         long livret = account(s, "Livret A", accountType(s, "Livret", true), eurId(s), "1000");
