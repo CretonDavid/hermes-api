@@ -34,6 +34,7 @@ public class TransferService {
     private final AccountService accountService;
     private final ExchangeRateService exchangeRateService;
     private final TransactionMapper transactionMapper;
+    private final GoalService goalService;
 
     @Transactional(readOnly = true)
     public TransferResponse getById(Long transactionId) {
@@ -52,8 +53,10 @@ public class TransferService {
 
         BigDecimal targetAmount = resolveTargetAmount(from, to, request.amount(), request.targetAmount(), request.operationDate());
         String label = request.label() == null || request.label().isBlank() ? null : request.label().trim();
-        return toResponse(createPair(from, to, request.amount(), targetAmount, label,
-                AccountService.blankToNull(request.notes()), request.operationDate(), null, TransactionStatus.PENDING));
+        Transaction debit = createPair(from, to, request.amount(), targetAmount, label,
+                AccountService.blankToNull(request.notes()), request.operationDate(), null, TransactionStatus.PENDING);
+        goalService.applyAllocations(debit.getTransferPeer(), request.goalAllocations());
+        return toResponse(debit);
     }
 
     @Transactional
@@ -83,6 +86,7 @@ public class TransferService {
         }
         fill(debit, from, to, request.amount(), label, notes, request.operationDate());
         fill(credit, to, from, targetAmount, label, notes, request.operationDate());
+        goalService.applyAllocations(credit, request.goalAllocations());
         return new TransferResponse(transactionMapper.toResponse(debit), transactionMapper.toResponse(credit));
     }
 

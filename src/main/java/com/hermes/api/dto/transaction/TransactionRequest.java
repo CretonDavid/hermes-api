@@ -3,6 +3,7 @@ package com.hermes.api.dto.transaction;
 import com.hermes.api.model.enums.PaymentMethod;
 import com.hermes.api.model.enums.TransactionDirection;
 import com.hermes.api.model.enums.TransactionStatus;
+import com.hermes.api.dto.goal.GoalAllocationRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
@@ -29,6 +30,8 @@ public record TransactionRequest(
         Long categoryId,
         // Ventilation sur plusieurs catégories (au moins 2 lignes), ou vide : categoryId est alors ignoré
         List<@Valid TransactionSplitRequest> splits,
+        // Crédit affecté à des budgets spéciaux du compte
+        List<@Valid GoalAllocationRequest> goalAllocations,
         PaymentMethod paymentMethod,
         @NotNull(message = "La date de l'opération est obligatoire")
         LocalDate operationDate,

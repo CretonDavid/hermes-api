@@ -39,6 +39,7 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final AccountService accountService;
     private final CategoryService categoryService;
+    private final GoalService goalService;
     private final TransactionMapper transactionMapper;
     private final CurrentUser currentUser;
 
@@ -230,6 +231,7 @@ public class TransactionService {
         transaction.setPaymentMethod(request.paymentMethod());
         transaction.setOperationDate(request.operationDate());
         transaction.setValueDate(request.valueDate());
+        goalService.applyAllocations(transaction, request.goalAllocations());
     }
 
     /**

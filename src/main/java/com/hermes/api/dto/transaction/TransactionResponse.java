@@ -25,6 +25,8 @@ public record TransactionResponse(
         List<SplitSummary> splits,
         // Liste filtrée par catégorie : part de l'opération ventilée qui correspond au filtre, null sinon
         BigDecimal matchedAmount,
+        // Part du crédit affectée à des budgets spéciaux
+        List<GoalAllocationSummary> goalAllocations,
         PaymentMethod paymentMethod,
         LocalDate operationDate,
         LocalDate valueDate,
@@ -44,6 +46,9 @@ public record TransactionResponse(
     }
 
     // category est null pour une part dont la catégorie a été supprimée
+    public record GoalAllocationSummary(Long goalId, String goalName, BigDecimal amount) {
+    }
+
     public record SplitSummary(CategorySummary category, String label, BigDecimal amount) {
     }
 
