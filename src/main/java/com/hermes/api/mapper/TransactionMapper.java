@@ -3,6 +3,7 @@ package com.hermes.api.mapper;
 import com.hermes.api.dto.recurring.RecurringTransactionResponse;
 import com.hermes.api.dto.recurring.ReimbursementPayerResponse;
 import com.hermes.api.dto.transaction.TransactionResponse;
+import com.hermes.api.dto.transaction.TransactionResponse.SplitSummary;
 import com.hermes.api.dto.transaction.TransactionResponse.TransferSummary;
 import com.hermes.api.model.Account;
 import com.hermes.api.model.RecurringTransaction;
@@ -11,6 +12,8 @@ import com.hermes.api.model.Transaction;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
+
 @Component
 @RequiredArgsConstructor
 public class TransactionMapper {
@@ -18,6 +21,13 @@ public class TransactionMapper {
     private final CategoryMapper categoryMapper;
 
     public TransactionResponse toResponse(Transaction entity) {
+        return toResponse(entity, null);
+    }
+
+    /**
+     * @param matchedAmount part d'une opération ventilée qui correspond au filtre de catégories de la liste
+     */
+    public TransactionResponse toResponse(Transaction entity, BigDecimal matchedAmount) {
         Account account = entity.getAccount();
         Transaction peer = entity.getTransferPeer();
         TransferSummary transfer = peer == null ? null
@@ -34,6 +44,10 @@ public class TransactionMapper {
                 entity.getPayee(),
                 entity.getNotes(),
                 categoryMapper.toSummary(entity.getCategory()),
+                entity.getSplits().stream()
+                        .map(s -> new SplitSummary(categoryMapper.toSummary(s.getCategory()), s.getAmount()))
+                        .toList(),
+                matchedAmount,
                 entity.getPaymentMethod(),
                 entity.getOperationDate(),
                 entity.getValueDate(),

@@ -10,6 +10,7 @@ import com.hermes.api.model.User;
 import com.hermes.api.repository.CategoryRepository;
 import com.hermes.api.repository.RecurringTransactionRepository;
 import com.hermes.api.repository.TransactionRepository;
+import com.hermes.api.repository.TransactionSplitRepository;
 import com.hermes.api.utils.CurrentUser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ public class CategoryService {
 
     private final CategoryRepository categoryRepository;
     private final TransactionRepository transactionRepository;
+    private final TransactionSplitRepository transactionSplitRepository;
     private final RecurringTransactionRepository recurringTransactionRepository;
     private final CategoryMapper categoryMapper;
     private final CurrentUser currentUser;
@@ -79,9 +81,11 @@ public class CategoryService {
         List<Long> ids = List.of(id);
         if (replacement != null) {
             transactionRepository.replaceCategory(ids, replacement);
+            transactionSplitRepository.replaceCategory(ids, replacement);
             recurringTransactionRepository.replaceCategory(ids, replacement);
         } else {
             transactionRepository.clearCategory(ids);
+            transactionSplitRepository.clearCategory(ids);
             recurringTransactionRepository.clearCategory(ids);
         }
         categoryRepository.delete(category);

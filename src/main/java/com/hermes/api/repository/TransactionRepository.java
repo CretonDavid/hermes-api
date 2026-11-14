@@ -70,6 +70,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             join fetch t.account a join fetch a.currency join fetch a.accountType
             left join fetch t.category
             left join fetch t.transferPeer p left join fetch p.account pa left join fetch pa.accountType
+            left join fetch t.splits s left join fetch s.category
             where a.owner.id = :ownerId and t.operationDate between :from and :to
             """)
     List<Transaction> findForStats(UUID ownerId, LocalDate from, LocalDate to);

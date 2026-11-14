@@ -123,14 +123,14 @@ public class StatsService {
         BigDecimal direct = BigDecimal.ZERO;
         long directCount = 0;
 
-        for (Transaction t : load(ctx, period.from(), period.to())) {
-            CategoryType bucket = bucket(t);
+        for (Part part : parts(ctx, load(ctx, period.from(), period.to()))) {
+            CategoryType bucket = bucket(part);
             if (bucket != type) {
                 continue;
             }
-            BigDecimal value = contribution(t, bucket, ctx.convert(t));
+            BigDecimal value = contribution(part.transaction(), bucket, part.value());
 
-            if (t.getCategory() == null) {
+            if (part.category() == null) {
                 if (parentId == null) {
                     uncategorized = uncategorized.add(value);
                     uncategorizedCount++;
@@ -138,7 +138,7 @@ public class StatsService {
                 continue;
             }
 
-            List<Long> path = path(t.getCategory().getId(), categories);
+            List<Long> path = path(part.category().getId(), categories);
             Long target;
             if (parentId == null) {
                 target = path.getLast();
@@ -215,11 +215,12 @@ public class StatsService {
         }
 
         Map<YearMonth, BigDecimal> amounts = new HashMap<>();
-        for (Transaction t : load(ctx, period.from(), period.to())) {
-            if (t.getCategory() == null || t.isTransfer() || !path(t.getCategory().getId(), categories).contains(categoryId)) {
+        for (Part part : parts(ctx, load(ctx, period.from(), period.to()))) {
+            Transaction t = part.transaction();
+            if (part.category() == null || t.isTransfer() || !path(part.category().getId(), categories).contains(categoryId)) {
                 continue;
             }
-            amounts.merge(YearMonth.from(t.getOperationDate()), contribution(t, category.getType(), ctx.convert(t)), BigDecimal::add);
+            amounts.merge(YearMonth.from(t.getOperationDate()), contribution(t, category.getType(), part.value()), BigDecimal::add);
         }
         List<CategoryTrendStat> items = months(period).stream()
                 .map(month -> new CategoryTrendStat(month, round(amounts.getOrDefault(month, BigDecimal.ZERO))))
@@ -237,7 +238,16 @@ public class StatsService {
         Map<String, Long> counts = new HashMap<>();
         Map<String, String> names = new HashMap<>();
         for (Transaction t : load(ctx, period.from(), period.to())) {
-            if (bucket(t) != CategoryType.EXPENSE) {
+            // Seules les lignes de dépense d'une opération ventilée comptent
+            BigDecimal expense = BigDecimal.ZERO;
+            boolean counted = false;
+            for (Part part : parts(ctx, t)) {
+                if (bucket(part) == CategoryType.EXPENSE) {
+                    expense = expense.add(contribution(t, CategoryType.EXPENSE, part.value()));
+                    counted = true;
+                }
+            }
+            if (!counted) {
                 continue;
             }
             String name = t.getPayee() != null ? t.getPayee() : t.getLabel();
@@ -245,7 +255,7 @@ public class StatsService {
                     ? t.getPayee().trim().toLowerCase(Locale.ROOT)
                     : "label:" + com.hermes.api.service.importing.LabelNormalizer.key(t.getLabel());
             names.putIfAbsent(key, name);
-            amounts.merge(key, contribution(t, CategoryType.EXPENSE, ctx.convert(t)), BigDecimal::add);
+            amounts.merge(key, expense, BigDecimal::add);
             counts.merge(key, 1L, Long::sum);
         }
         List<PayeeStat> items = amounts.entrySet().stream()
@@ -364,23 +374,50 @@ public class StatsService {
                 savings = savings.subtract(value);
             }
 
-            CategoryType bucket = bucket(t);
-            if (bucket == CategoryType.INCOME) {
-                income = income.add(contribution(t, bucket, value));
-            } else if (bucket == CategoryType.EXPENSE) {
-                expenses = expenses.add(contribution(t, bucket, value));
+            for (Part part : parts(ctx, t)) {
+                CategoryType bucket = bucket(part);
+                if (bucket == CategoryType.INCOME) {
+                    income = income.add(contribution(t, bucket, part.value()));
+                } else if (bucket == CategoryType.EXPENSE) {
+                    expenses = expenses.add(contribution(t, bucket, part.value()));
+                }
             }
         }
         return new Totals(income, expenses, savings);
     }
 
+    /**
+     * Part d'une opération rattachée à une catégorie, avec son montant converti dans la devise de
+     * référence. Une opération non ventilée n'a qu'une part, de tout son montant.
+     */
+    private record Part(Transaction transaction, Category category, BigDecimal value) {
+    }
+
+    private static List<Part> parts(Context ctx, List<Transaction> transactions) {
+        List<Part> parts = new ArrayList<>();
+        for (Transaction t : transactions) {
+            parts.addAll(parts(ctx, t));
+        }
+        return parts;
+    }
+
+    private static List<Part> parts(Context ctx, Transaction t) {
+        if (!t.isSplit()) {
+            return List.of(new Part(t, t.getCategory(), ctx.convert(t)));
+        }
+        return t.getSplits().stream()
+                .map(s -> new Part(t, s.getCategory(), ctx.convert(s.getAmount(), t.getAccount(), t.getOperationDate())))
+                .toList();
+    }
+
     // null pour un virement interne
-    private static CategoryType bucket(Transaction t) {
+    private static CategoryType bucket(Part part) {
+        Transaction t = part.transaction();
         if (t.isTransfer()) {
             return null;
         }
-        if (t.getCategory() != null) {
-            return t.getCategory().getType();
+        if (part.category() != null) {
+            return part.category().getType();
         }
         return t.getDirection() == TransactionDirection.DEBIT ? CategoryType.EXPENSE : CategoryType.INCOME;
     }
