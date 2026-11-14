@@ -28,8 +28,7 @@ public record TransactionRequest(
         String notes,
         Long categoryId,
         // Ventilation sur plusieurs catégories (au moins 2 lignes), ou vide : categoryId est alors ignoré
-        @Valid
-        List<TransactionSplitRequest> splits,
+        List<@Valid TransactionSplitRequest> splits,
         PaymentMethod paymentMethod,
         @NotNull(message = "La date de l'opération est obligatoire")
         LocalDate operationDate,

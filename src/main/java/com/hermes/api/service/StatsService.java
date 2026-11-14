@@ -186,6 +186,34 @@ public class StatsService {
         return new StatsListResponse<>(ctx.currency(), ctx.rates().missingCurrencies(), result);
     }
 
+    // ---------- Dépenses par catégorie (budget) ----------
+
+    /**
+     * Dépenses d'une période par catégorie exacte (sans regroupement par parent), tous comptes,
+     * dans la devise de référence. Les remboursements viennent en déduction.
+     */
+    public record CategoryExpenses(String currencyCode, List<String> missingRates,
+                                   Map<Long, BigDecimal> byCategory, BigDecimal uncategorized) {
+    }
+
+    public CategoryExpenses expensesByCategory(LocalDate from, LocalDate to) {
+        Context ctx = context(null);
+        Map<Long, BigDecimal> amounts = new HashMap<>();
+        BigDecimal uncategorized = BigDecimal.ZERO;
+        for (Part part : parts(ctx, load(ctx, from, to))) {
+            if (bucket(part) != CategoryType.EXPENSE) {
+                continue;
+            }
+            BigDecimal value = contribution(part.transaction(), CategoryType.EXPENSE, part.value());
+            if (part.category() == null) {
+                uncategorized = uncategorized.add(value);
+            } else {
+                amounts.merge(part.category().getId(), value, BigDecimal::add);
+            }
+        }
+        return new CategoryExpenses(ctx.currency(), ctx.rates().missingCurrencies(), amounts, uncategorized);
+    }
+
     // ---------- Evolution mensuelle ----------
 
     public StatsListResponse<MonthlyStat> monthly(LocalDate from, LocalDate to, List<Long> accountIds) {
