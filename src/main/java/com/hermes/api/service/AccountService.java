@@ -110,6 +110,7 @@ public class AccountService {
         account.setAccountType(accountTypeService.find(request.accountTypeId()));
         account.setCurrency(currencyService.findAccessible(request.currencyId()));
         account.setInitialBalance(request.initialBalance() == null ? BigDecimal.ZERO : request.initialBalance());
+        account.setCeiling(request.ceiling());
         account.setOpeningDate(request.openingDate() == null ? LocalDate.now() : request.openingDate());
         account.setClosed(request.closed());
     }
