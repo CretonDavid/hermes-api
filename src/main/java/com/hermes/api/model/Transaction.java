@@ -108,6 +108,13 @@ public class Transaction {
     @Builder.Default
     private List<TransactionSplit> splits = new ArrayList<>();
 
+    // Crédit affecté en tout ou partie à des budgets spéciaux du compte
+    @OneToMany(mappedBy = "transaction", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id")
+    @BatchSize(size = 100)
+    @Builder.Default
+    private List<GoalAllocation> goalAllocations = new ArrayList<>();
+
     public boolean isTransfer() {
         return transferPeer != null;
     }

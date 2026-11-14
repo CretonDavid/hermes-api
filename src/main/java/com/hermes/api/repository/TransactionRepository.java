@@ -119,6 +119,14 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             """)
     List<Transaction> findCategorizedByOwner(UUID ownerId, Pageable pageable);
 
+    // Opérations d'un compte jusqu'à une date, dans l'ordre chronologique, avec leurs affectations aux budgets spéciaux
+    @Query("""
+            select distinct t from Transaction t left join fetch t.goalAllocations a left join fetch a.goal
+            where t.account.id = :accountId and t.operationDate <= :until
+            order by t.operationDate, t.id
+            """)
+    List<Transaction> findForGoals(Long accountId, LocalDate until);
+
     @Query("select t from Transaction t where t.account.id = :accountId and t.operationDate between :from and :to")
     List<Transaction> findByAccountBetween(Long accountId, LocalDate from, LocalDate to);
 

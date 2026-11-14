@@ -3,6 +3,7 @@ package com.hermes.api.mapper;
 import com.hermes.api.dto.recurring.RecurringTransactionResponse;
 import com.hermes.api.dto.recurring.ReimbursementPayerResponse;
 import com.hermes.api.dto.transaction.TransactionResponse;
+import com.hermes.api.dto.transaction.TransactionResponse.GoalAllocationSummary;
 import com.hermes.api.dto.transaction.TransactionResponse.SplitSummary;
 import com.hermes.api.dto.transaction.TransactionResponse.TransferSummary;
 import com.hermes.api.model.Account;
@@ -48,6 +49,9 @@ public class TransactionMapper {
                         .map(s -> new SplitSummary(categoryMapper.toSummary(s.getCategory()), s.getLabel(), s.getAmount()))
                         .toList(),
                 matchedAmount,
+                entity.getGoalAllocations().stream()
+                        .map(a -> new GoalAllocationSummary(a.getGoal().getId(), a.getGoal().getName(), a.getAmount()))
+                        .toList(),
                 entity.getPaymentMethod(),
                 entity.getOperationDate(),
                 entity.getValueDate(),
