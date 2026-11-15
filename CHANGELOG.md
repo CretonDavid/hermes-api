@@ -3,6 +3,23 @@
 Toutes les évolutions notables de l'API d'Hermès sont listées ici. Les numéros de version suivent
 [SemVer](https://semver.org/lang/fr/).
 
+## [1.1.0] - 2026-11-15
+
+### Ajouts
+
+- Plafond facultatif sur les comptes bancaires, avec le reste à épargner calculé à partir du solde
+  à date, intérêts compris.
+- Ventilation d'une opération sur plusieurs catégories : au moins deux lignes dont la somme est égale
+  au montant, chacune avec sa catégorie, son montant et un libellé facultatif. Les filtres par
+  catégorie et les totaux ne retiennent que la part concernée.
+- Budget mensuel par enveloppes de catégories de dépense, valable à partir d'un mois ou pour ce mois
+  seulement, sans report. Une catégorie et sa catégorie parente ne peuvent pas avoir chacune leur
+  enveloppe.
+- Budgets spéciaux : objectifs d'épargne liés à un compte, alimentés par affectation de crédits
+  (virements compris) et par un montant de départ. L'argent libre du compte peut être affecté à un
+  budget ou rendu libre. Si le solde passe sous le total des budgets, les retraits sont répartis au
+  prorata. Un budget peut être marqué comme utilisé, puis rétabli.
+
 ## [1.0.0] - 2026-11-09
 
 Première version publiée.
@@ -48,4 +65,5 @@ Première version publiée.
   base), avec une sonde de santé `/actuator/health`.
 - Intégration continue GitHub Actions : compilation avec avertissements, tests et couverture JaCoCo.
 
+[1.1.0]: https://github.com/CretonDavid/hermes-api/releases/tag/v1.1.0
 [1.0.0]: https://github.com/CretonDavid/hermes-api/releases/tag/v1.0.0
