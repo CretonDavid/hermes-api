@@ -119,6 +119,24 @@ class AccountingApiTest extends ApiTestSupport {
     }
 
     @Test
+    void accountCeilingIsOptionalAndMustBePositive() throws Exception {
+        Session s = newUser();
+        long type = accountType(s, "Livret", true);
+        String body = "{\"name\":\"Livret A\",\"accountTypeId\":" + type + ",\"currencyId\":" + eurId(s);
+
+        long id = readId(mockMvc.perform(as(s, post("/accounts")).content(body + ",\"ceiling\":22950}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.ceiling").value(22950))
+                .andReturn());
+        mockMvc.perform(as(s, put("/accounts/" + id)).content(body + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ceiling").doesNotExist());
+        mockMvc.perform(as(s, post("/accounts")).content(body + ",\"ceiling\":0}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.ceiling").exists());
+    }
+
+    @Test
     void transferCreatesTwoLinkedTransactionsAndCanBeDeletedAtOnce() throws Exception {
         Session s = newUser();
         long checking = account(s, "Courant", accountType(s, "Courant", false), eurId(s), "500");

@@ -1,9 +1,12 @@
 package com.hermes.api.dto.transaction;
 
+import com.hermes.api.dto.goal.GoalAllocationRequest;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 public record TransferRequest(
         @NotNull(message = "Le compte bancaire débité est obligatoire")
@@ -22,6 +25,8 @@ public record TransferRequest(
         String label,
         @Size(max = 1000, message = "Les notes ne doivent pas dépasser 1000 caractères")
         String notes,
+        // Part du montant crédité affectée à des budgets spéciaux du compte crédité
+        List<@Valid GoalAllocationRequest> goalAllocations,
         @NotNull(message = "La date est obligatoire")
         LocalDate operationDate
 ) {

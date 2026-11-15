@@ -3,10 +3,13 @@ package com.hermes.api.dto.transaction;
 import com.hermes.api.model.enums.PaymentMethod;
 import com.hermes.api.model.enums.TransactionDirection;
 import com.hermes.api.model.enums.TransactionStatus;
+import com.hermes.api.dto.goal.GoalAllocationRequest;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 public record TransactionRequest(
         @NotNull(message = "Le compte bancaire est obligatoire")
@@ -25,6 +28,10 @@ public record TransactionRequest(
         @Size(max = 1000, message = "Les notes ne doivent pas dépasser 1000 caractères")
         String notes,
         Long categoryId,
+        // Ventilation sur plusieurs catégories (au moins 2 lignes), ou vide : categoryId est alors ignoré
+        List<@Valid TransactionSplitRequest> splits,
+        // Crédit affecté à des budgets spéciaux du compte
+        List<@Valid GoalAllocationRequest> goalAllocations,
         PaymentMethod paymentMethod,
         @NotNull(message = "La date de l'opération est obligatoire")
         LocalDate operationDate,

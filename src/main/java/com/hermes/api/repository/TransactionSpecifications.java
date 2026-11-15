@@ -2,8 +2,11 @@ package com.hermes.api.repository;
 
 import com.hermes.api.dto.transaction.TransactionFilter;
 import com.hermes.api.model.Transaction;
+import com.hermes.api.model.TransactionSplit;
 import com.hermes.api.model.enums.TransactionDirection;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.ArrayList;
@@ -37,12 +40,27 @@ public final class TransactionSpecifications {
                 predicates.add(cb.lessThanOrEqualTo(root.get("operationDate"), filter.to()));
             }
 
+            // Une opération ventilée correspond si l'une de ses lignes correspond
             List<Predicate> categoryPredicates = new ArrayList<>();
             if (categoryIds != null && !categoryIds.isEmpty()) {
+                Subquery<Long> split = query.subquery(Long.class);
+                Root<TransactionSplit> s = split.from(TransactionSplit.class);
+                split.select(s.get("id")).where(
+                        cb.equal(s.get("transaction"), root),
+                        s.get("category").get("id").in(categoryIds));
                 categoryPredicates.add(root.get("category").get("id").in(categoryIds));
+                categoryPredicates.add(cb.exists(split));
             }
             if (Boolean.TRUE.equals(filter.uncategorized())) {
-                categoryPredicates.add(cb.and(cb.isNull(root.get("category")), cb.isNull(root.get("transferPeer"))));
+                Subquery<Long> uncategorizedSplit = query.subquery(Long.class);
+                Root<TransactionSplit> s = uncategorizedSplit.from(TransactionSplit.class);
+                uncategorizedSplit.select(s.get("id")).where(
+                        cb.equal(s.get("transaction"), root),
+                        cb.isNull(s.get("category")));
+                categoryPredicates.add(cb.and(
+                        cb.isNull(root.get("category")),
+                        cb.isNull(root.get("transferPeer")),
+                        cb.or(cb.isEmpty(root.get("splits")), cb.exists(uncategorizedSplit))));
             }
             if (!categoryPredicates.isEmpty()) {
                 predicates.add(cb.or(categoryPredicates.toArray(Predicate[]::new)));
@@ -66,7 +84,14 @@ public final class TransactionSpecifications {
             }
             if (filter.search() != null && !filter.search().isBlank()) {
                 String pattern = LikePatterns.containsIgnoreCase(filter.search());
+                // Le libellé d'une ligne de ventilation est aussi recherché
+                Subquery<Long> splitLabel = query.subquery(Long.class);
+                Root<TransactionSplit> s = splitLabel.from(TransactionSplit.class);
+                splitLabel.select(s.get("id")).where(
+                        cb.equal(s.get("transaction"), root),
+                        cb.like(cb.lower(cb.coalesce(s.get("label"), "")), pattern, LikePatterns.ESCAPE));
                 predicates.add(cb.or(
+                        cb.exists(splitLabel),
                         cb.like(cb.lower(root.get("label")), pattern, LikePatterns.ESCAPE),
                         cb.like(cb.lower(cb.coalesce(root.get("payee"), "")), pattern, LikePatterns.ESCAPE),
                         cb.like(cb.lower(cb.coalesce(root.get("notes"), "")), pattern, LikePatterns.ESCAPE)

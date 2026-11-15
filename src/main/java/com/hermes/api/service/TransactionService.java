@@ -8,6 +8,7 @@ import com.hermes.api.mapper.TransactionMapper;
 import com.hermes.api.model.Account;
 import com.hermes.api.model.Category;
 import com.hermes.api.model.Transaction;
+import com.hermes.api.model.TransactionSplit;
 import com.hermes.api.model.enums.TransactionDirection;
 import com.hermes.api.model.enums.TransactionStatus;
 import com.hermes.api.repository.LikePatterns;
@@ -22,6 +23,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -37,6 +39,7 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final AccountService accountService;
     private final CategoryService categoryService;
+    private final GoalService goalService;
     private final TransactionMapper transactionMapper;
     private final CurrentUser currentUser;
 
@@ -44,15 +47,19 @@ public class TransactionService {
     public PageResponse<TransactionResponse> search(TransactionFilter filter, int page, int size, String sort, String direction) {
         Pageable pageable = PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, MAX_PAGE_SIZE), sort(sort, direction));
 
+        Set<Long> categoryIds = categoryIds(filter);
+        boolean uncategorized = Boolean.TRUE.equals(filter.uncategorized());
         return PageResponse.of(
-                transactionRepository.findAll(TransactionSpecifications.matching(currentUser.id(), filter, categoryIds(filter)), pageable),
-                transactionMapper::toResponse);
+                transactionRepository.findAll(TransactionSpecifications.matching(currentUser.id(), filter, categoryIds), pageable),
+                t -> transactionMapper.toResponse(t, matchedAmount(t, categoryIds, uncategorized)));
     }
 
     @Transactional(readOnly = true)
     public List<TransactionTotals> totals(TransactionFilter filter) {
+        Set<Long> categoryIds = categoryIds(filter);
         return transactionRepository.totalsByCurrency(
-                TransactionSpecifications.matching(currentUser.id(), filter, categoryIds(filter)));
+                TransactionSpecifications.matching(currentUser.id(), filter, categoryIds),
+                categoryIds, Boolean.TRUE.equals(filter.uncategorized()));
     }
 
     @Transactional
@@ -65,6 +72,8 @@ public class TransactionService {
             if (transaction.isTransfer()) {
                 skippedTransfers++;
             } else {
+                // La nouvelle catégorie remplace une éventuelle ventilation
+                transaction.getSplits().clear();
                 transaction.setCategory(category);
                 updated++;
             }
@@ -218,9 +227,56 @@ public class TransactionService {
         transaction.setLabel(request.label().trim());
         transaction.setPayee(AccountService.blankToNull(request.payee()));
         transaction.setNotes(AccountService.blankToNull(request.notes()));
-        transaction.setCategory(request.categoryId() == null ? null : categoryService.find(request.categoryId()));
+        applyCategories(transaction, request);
         transaction.setPaymentMethod(request.paymentMethod());
         transaction.setOperationDate(request.operationDate());
         transaction.setValueDate(request.valueDate());
+        goalService.applyAllocations(transaction, request.goalAllocations());
+    }
+
+    /**
+     * Une catégorie, ou une ventilation d'au moins deux lignes dont la somme est égale au montant.
+     * Une ventilation d'une seule ligne revient à une catégorie simple.
+     */
+    private void applyCategories(Transaction transaction, TransactionRequest request) {
+        List<TransactionSplitRequest> splits = request.splits() == null ? List.of() : request.splits();
+        transaction.getSplits().clear();
+        if (splits.size() == 1) {
+            transaction.setCategory(categoryService.find(splits.getFirst().categoryId()));
+            return;
+        }
+        if (splits.isEmpty()) {
+            transaction.setCategory(request.categoryId() == null ? null : categoryService.find(request.categoryId()));
+            return;
+        }
+
+        BigDecimal sum = splits.stream().map(TransactionSplitRequest::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (sum.compareTo(request.amount()) != 0) {
+            throw new BadRequestException("La somme de la ventilation (" + sum.toPlainString()
+                    + ") doit être égale au montant de l'opération (" + request.amount().toPlainString() + ")");
+        }
+        transaction.setCategory(null);
+        for (TransactionSplitRequest split : splits) {
+            transaction.getSplits().add(TransactionSplit.builder()
+                    .transaction(transaction)
+                    .category(categoryService.find(split.categoryId()))
+                    .label(AccountService.blankToNull(split.label()))
+                    .amount(split.amount())
+                    .build());
+        }
+    }
+
+    /**
+     * Part d'une opération ventilée qui correspond au filtre de catégories : c'est elle que la liste
+     * affiche, pour que ses montants correspondent aux statistiques. Null sans filtre de catégorie.
+     */
+    private static BigDecimal matchedAmount(Transaction transaction, Set<Long> categoryIds, boolean uncategorized) {
+        if (!transaction.isSplit() || (categoryIds.isEmpty() && !uncategorized)) {
+            return null;
+        }
+        return transaction.getSplits().stream()
+                .filter(s -> s.getCategory() == null ? uncategorized : categoryIds.contains(s.getCategory().getId()))
+                .map(TransactionSplit::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }

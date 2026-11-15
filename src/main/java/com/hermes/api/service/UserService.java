@@ -41,6 +41,11 @@ public class UserService {
     private final CurrentUser currentUser;
 
     private final TransactionRepository transactionRepository;
+    private final TransactionSplitRepository transactionSplitRepository;
+    private final GoalAllocationRepository goalAllocationRepository;
+    private final GoalAdjustmentRepository goalAdjustmentRepository;
+    private final SavingsGoalRepository savingsGoalRepository;
+    private final BudgetEnvelopeRepository budgetEnvelopeRepository;
     private final ReconciliationRepository reconciliationRepository;
     private final RecurringTransactionRepository recurringTransactionRepository;
     private final ReimbursementPayerRepository reimbursementPayerRepository;
@@ -140,11 +145,17 @@ public class UserService {
 
         refreshTokenRepository.deleteByUserId(userId);
         transactionRepository.unlinkAllByOwnerId(userId);
+        goalAdjustmentRepository.deleteByOwnerId(userId);
+        goalAllocationRepository.deleteByOwnerId(userId);
+        savingsGoalRepository.deleteByOwnerId(userId);
+        transactionSplitRepository.deleteByOwnerId(userId);
         transactionRepository.deleteByOwnerId(userId);
         reconciliationRepository.deleteByOwnerId(userId);
         reimbursementPayerRepository.deleteByOwnerId(userId);
         recurringTransactionRepository.deleteByOwnerId(userId);
         accountRepository.deleteByOwnerId(userId);
+        budgetEnvelopeRepository.deleteAmountsByOwnerId(userId);
+        budgetEnvelopeRepository.deleteByOwnerId(userId);
         categoryRepository.clearParentsByOwnerId(userId);
         categoryRepository.deleteByOwnerId(userId);
         exchangeRateRepository.deleteByOwnerId(userId);

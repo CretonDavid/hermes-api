@@ -5,10 +5,13 @@ import com.hermes.api.model.enums.TransactionDirection;
 import com.hermes.api.model.enums.TransactionStatus;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -98,8 +101,26 @@ public class Transaction {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    // Ventilation sur plusieurs catégories : la catégorie de l'opération est alors vide
+    @OneToMany(mappedBy = "transaction", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id")
+    @BatchSize(size = 100)
+    @Builder.Default
+    private List<TransactionSplit> splits = new ArrayList<>();
+
+    // Crédit affecté en tout ou partie à des budgets spéciaux du compte
+    @OneToMany(mappedBy = "transaction", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id")
+    @BatchSize(size = 100)
+    @Builder.Default
+    private List<GoalAllocation> goalAllocations = new ArrayList<>();
+
     public boolean isTransfer() {
         return transferPeer != null;
+    }
+
+    public boolean isSplit() {
+        return splits != null && !splits.isEmpty();
     }
 
     public BigDecimal signedAmount() {

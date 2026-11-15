@@ -8,6 +8,7 @@ import com.hermes.api.model.enums.TransactionStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record TransactionResponse(
         Long id,
@@ -20,6 +21,12 @@ public record TransactionResponse(
         String payee,
         String notes,
         CategorySummary category,
+        // Ventilation sur plusieurs catégories, vide sinon
+        List<SplitSummary> splits,
+        // Liste filtrée par catégorie : part de l'opération ventilée qui correspond au filtre, null sinon
+        BigDecimal matchedAmount,
+        // Part du crédit affectée à des budgets spéciaux
+        List<GoalAllocationSummary> goalAllocations,
         PaymentMethod paymentMethod,
         LocalDate operationDate,
         LocalDate valueDate,
@@ -36,6 +43,13 @@ public record TransactionResponse(
     }
 
     public record CategorySummary(Long id, String name, String color, String icon) {
+    }
+
+    // category est null pour une part dont la catégorie a été supprimée
+    public record GoalAllocationSummary(Long goalId, String goalName, BigDecimal amount) {
+    }
+
+    public record SplitSummary(CategorySummary category, String label, BigDecimal amount) {
     }
 
     public record TransferSummary(Long peerTransactionId, Long accountId, String accountName) {

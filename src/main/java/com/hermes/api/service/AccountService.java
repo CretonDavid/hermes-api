@@ -10,6 +10,10 @@ import com.hermes.api.repository.ReconciliationRepository;
 import com.hermes.api.repository.RecurringTransactionRepository;
 import com.hermes.api.repository.ReimbursementPayerRepository;
 import com.hermes.api.repository.TransactionRepository;
+import com.hermes.api.repository.TransactionSplitRepository;
+import com.hermes.api.repository.GoalAdjustmentRepository;
+import com.hermes.api.repository.GoalAllocationRepository;
+import com.hermes.api.repository.SavingsGoalRepository;
 import com.hermes.api.repository.TransactionRepository.AccountBalanceView;
 import com.hermes.api.utils.CurrentUser;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +37,10 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
+    private final TransactionSplitRepository transactionSplitRepository;
+    private final GoalAllocationRepository goalAllocationRepository;
+    private final GoalAdjustmentRepository goalAdjustmentRepository;
+    private final SavingsGoalRepository savingsGoalRepository;
     private final ReconciliationRepository reconciliationRepository;
     private final RecurringTransactionRepository recurringTransactionRepository;
     private final ReimbursementPayerRepository reimbursementPayerRepository;
@@ -90,6 +98,10 @@ public class AccountService {
         transactionRepository.unlinkTransfersOfAccount(id);
         transactionRepository.detachRecurringOfAccount(id);
         transactionRepository.detachReimbursementsOfAccount(id);
+        goalAdjustmentRepository.deleteByAccountId(id);
+        goalAllocationRepository.deleteByAccountId(id);
+        savingsGoalRepository.deleteByAccountId(id);
+        transactionSplitRepository.deleteByAccountId(id);
         transactionRepository.deleteByAccountId(id);
         reconciliationRepository.deleteByAccountId(id);
         reimbursementPayerRepository.deleteByAccountId(id);
@@ -110,6 +122,7 @@ public class AccountService {
         account.setAccountType(accountTypeService.find(request.accountTypeId()));
         account.setCurrency(currencyService.findAccessible(request.currencyId()));
         account.setInitialBalance(request.initialBalance() == null ? BigDecimal.ZERO : request.initialBalance());
+        account.setCeiling(request.ceiling());
         account.setOpeningDate(request.openingDate() == null ? LocalDate.now() : request.openingDate());
         account.setClosed(request.closed());
     }

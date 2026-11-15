@@ -70,6 +70,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             join fetch t.account a join fetch a.currency join fetch a.accountType
             left join fetch t.category
             left join fetch t.transferPeer p left join fetch p.account pa left join fetch pa.accountType
+            left join fetch t.splits s left join fetch s.category
             where a.owner.id = :ownerId and t.operationDate between :from and :to
             """)
     List<Transaction> findForStats(UUID ownerId, LocalDate from, LocalDate to);
@@ -117,6 +118,14 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             order by t.operationDate desc, t.id desc
             """)
     List<Transaction> findCategorizedByOwner(UUID ownerId, Pageable pageable);
+
+    // Opérations d'un compte jusqu'à une date, dans l'ordre chronologique, avec leurs affectations aux budgets spéciaux
+    @Query("""
+            select distinct t from Transaction t left join fetch t.goalAllocations a left join fetch a.goal
+            where t.account.id = :accountId and t.operationDate <= :until
+            order by t.operationDate, t.id
+            """)
+    List<Transaction> findForGoals(Long accountId, LocalDate until);
 
     @Query("select t from Transaction t where t.account.id = :accountId and t.operationDate between :from and :to")
     List<Transaction> findByAccountBetween(Long accountId, LocalDate from, LocalDate to);

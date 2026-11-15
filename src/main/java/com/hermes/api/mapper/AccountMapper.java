@@ -39,6 +39,7 @@ public class AccountMapper {
                 initial.add(current),
                 initial.add(total),
                 initial.add(cleared),
+                entity.getCeiling(),
                 entity.getOpeningDate(),
                 entity.isClosed()
         );
