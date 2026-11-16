@@ -4,13 +4,17 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * Équivalent mensuel des récurrences actives, converti dans la devise de référence au taux du jour.
+ * Récurrences converties dans la devise de référence.
  *
- * @param missingRates devises sans taux de change : leurs récurrences ne sont pas comptées
+ * @param monthExpenses dépenses récurrentes du mois en cours : échéances déjà passées (montant réel)
+ *                      et échéances à venir jusqu'à la fin du mois
+ * @param expenses      coût mensuel moyen des dépenses récurrentes actives (une annuelle compte pour 1/12)
+ * @param missingRates  devises sans taux de change : leurs montants ne sont pas comptés
  */
 public record RecurringMonthlyResponse(
         String currencyCode,
         List<String> missingRates,
+        BigDecimal monthExpenses,
         BigDecimal expenses,
         BigDecimal income,
         BigDecimal transfers

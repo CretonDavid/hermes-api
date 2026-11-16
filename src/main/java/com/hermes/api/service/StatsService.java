@@ -342,9 +342,22 @@ public class StatsService {
         BigDecimal expenses = BigDecimal.ZERO;
         BigDecimal income = BigDecimal.ZERO;
         BigDecimal transfers = BigDecimal.ZERO;
+        LocalDate monthEnd = YearMonth.from(today).atEndOfMonth();
+
+        // Mois en cours : échéances déjà passées (montant réel de l'opération) puis échéances à venir
+        BigDecimal monthExpenses = BigDecimal.ZERO;
+        for (Transaction t : transactionRepository.findRecurringDebits(ctx.userId(), today.withDayOfMonth(1), monthEnd)) {
+            monthExpenses = monthExpenses.add(ctx.convert(t));
+        }
+
         for (RecurringTransaction r : recurringRepository.findAllByOwner(ctx.userId())) {
             if (!r.isActive() || r.getNextDate() == null) {
                 continue;
+            }
+            if (!r.isTransfer() && r.getDirection() == TransactionDirection.DEBIT) {
+                int dueThisMonth = occurrencesUntil(r, monthEnd);
+                monthExpenses = monthExpenses.add(
+                        ctx.convert(r.getAmount().multiply(BigDecimal.valueOf(dueThisMonth)), r.getAccount(), today));
             }
             BigDecimal monthly = r.getAmount()
                     .multiply(OCCURRENCES_PER_MONTH.get(r.getFrequency()))
@@ -359,7 +372,20 @@ public class StatsService {
             }
         }
         return new RecurringMonthlyResponse(ctx.currency(), ctx.rates().missingCurrencies(),
-                round(expenses), round(income), round(transfers));
+                round(monthExpenses), round(expenses), round(income), round(transfers));
+    }
+
+    // Échéances pas encore générées d'une récurrence, de sa prochaine date jusqu'à limit inclus
+    private static int occurrencesUntil(RecurringTransaction r, LocalDate limit) {
+        int count = 0;
+        int index = r.getOccurrenceCount();
+        LocalDate date = r.getNextDate();
+        while (!date.isAfter(limit) && (r.getEndDate() == null || !date.isAfter(r.getEndDate()))) {
+            count++;
+            index++;
+            date = r.getFrequency().occurrence(r.getStartDate(), r.getInterval(), index);
+        }
+        return count;
     }
 
     // ---------- Epargne ----------
