@@ -174,6 +174,42 @@ class AccountingApiTest extends ApiTestSupport {
     }
 
     @Test
+    void bulkDeleteIsAllOrNothingAndRemovesBothLegsOfTransfers() throws Exception {
+        Session s = newUser();
+        long checking = account(s, "Courant", accountType(s, "Courant", false), eurId(s), "100");
+        long savings = account(s, "Livret A", accountType(s, "Livret", true), eurId(s), "0");
+        long reconciled = transaction(s, checking, "DEBIT", "30", "Rapprochée", null, "2026-01-02");
+        long a = transaction(s, checking, "DEBIT", "20", "A", null, "2026-01-03");
+        long b = transaction(s, checking, "DEBIT", "5", "B", null, "2026-01-04");
+        MvcResult transfer = mockMvc.perform(as(s, post("/transfers")).content("{\"fromAccountId\":" + checking
+                        + ",\"toAccountId\":" + savings + ",\"amount\":10,\"operationDate\":\"2026-01-05\"}"))
+                .andExpect(status().isCreated()).andReturn();
+        MvcResult other = mockMvc.perform(as(s, post("/transfers")).content("{\"fromAccountId\":" + checking
+                        + ",\"toAccountId\":" + savings + ",\"amount\":15,\"operationDate\":\"2026-01-06\"}"))
+                .andExpect(status().isCreated()).andReturn();
+
+        mockMvc.perform(as(s, patch("/transactions/" + reconciled + "/status")).content("{\"status\":\"CLEARED\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(as(s, post("/accounts/" + checking + "/reconciliations"))
+                        .content("{\"statementDate\":\"2026-01-31\",\"statementBalance\":70}"))
+                .andExpect(status().isCreated());
+
+        // Une opération rapprochée dans la sélection : rien n'est supprimé
+        mockMvc.perform(as(s, post("/transactions/delete")).content("{\"transactionIds\":[" + a + "," + reconciled + "]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("rien n'a été supprimé")));
+        mockMvc.perform(as(s, get("/transactions/" + a))).andExpect(status().isOk());
+
+        // Les deux jambes d'un virement sélectionnées, et une seule jambe d'un autre : chacun est supprimé en entier
+        mockMvc.perform(as(s, post("/transactions/delete")).content("{\"transactionIds\":[" + a + "," + b + ","
+                        + read(transfer, "$.debit.id") + "," + read(transfer, "$.credit.id") + "," + read(other, "$.credit.id") + "]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deleted").value(6));
+        mockMvc.perform(as(s, get("/transactions?accountIds=" + checking))).andExpect(jsonPath("$.totalElements").value(1));
+        mockMvc.perform(as(s, get("/transactions?accountIds=" + savings))).andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @Test
     void transferBetweenCurrenciesUsesTargetAmountOrExchangeRate() throws Exception {
         Session s = newUser();
         long type = accountType(s, "Courant", false);

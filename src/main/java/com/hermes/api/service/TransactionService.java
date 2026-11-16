@@ -172,13 +172,51 @@ public class TransactionService {
     @Transactional
     public void delete(Long id) {
         Transaction transaction = find(id);
-        Transaction peer = transaction.getTransferPeer();
-
-        if (transaction.getStatus() == TransactionStatus.RECONCILED
-                || (peer != null && peer.getStatus() == TransactionStatus.RECONCILED)) {
+        if (isReconciled(transaction)) {
             throw new BadRequestException("Une opération rapprochée ne peut pas être supprimée");
         }
+        delete(transaction);
+    }
 
+    /**
+     * Suppression groupée, tout ou rien : une seule opération rapprochée bloque l'ensemble.
+     * Un virement emporte son opération liée, même si elle n'est pas sélectionnée.
+     *
+     * @return nombre d'opérations supprimées, opérations liées des virements comprises
+     */
+    @Transactional
+    public int deleteAll(List<Long> ids) {
+        List<Transaction> transactions = new LinkedHashSet<>(ids).stream().map(this::find).toList();
+        long reconciled = transactions.stream().filter(TransactionService::isReconciled).count();
+        if (reconciled > 0) {
+            throw new BadRequestException(reconciled == 1
+                    ? "Une opération rapprochée ne peut pas être supprimée : rien n'a été supprimé"
+                    : reconciled + " opérations rapprochées ne peuvent pas être supprimées : rien n'a été supprimé");
+        }
+        Set<Long> deleted = new HashSet<>();
+        for (Transaction transaction : transactions) {
+            if (deleted.contains(transaction.getId())) {
+                continue; // déjà supprimée avec l'autre jambe du virement
+            }
+            Transaction peer = transaction.getTransferPeer();
+            if (peer != null) {
+                deleted.add(peer.getId());
+            }
+            deleted.add(transaction.getId());
+            delete(transaction);
+        }
+        return deleted.size();
+    }
+
+    private static boolean isReconciled(Transaction transaction) {
+        Transaction peer = transaction.getTransferPeer();
+        return transaction.getStatus() == TransactionStatus.RECONCILED
+                || (peer != null && peer.getStatus() == TransactionStatus.RECONCILED);
+    }
+
+    private void delete(Transaction transaction) {
+        Long id = transaction.getId();
+        Transaction peer = transaction.getTransferPeer();
         if (peer != null) {
             transaction.setTransferPeer(null);
             peer.setTransferPeer(null);
