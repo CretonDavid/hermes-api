@@ -6,7 +6,6 @@ import com.hermes.api.exception.BadRequestException;
 import com.hermes.api.exception.ResourceNotFoundException;
 import com.hermes.api.mapper.TransactionMapper;
 import com.hermes.api.model.Account;
-import com.hermes.api.model.Category;
 import com.hermes.api.model.Transaction;
 import com.hermes.api.model.TransactionSplit;
 import com.hermes.api.model.enums.TransactionDirection;
@@ -60,25 +59,6 @@ public class TransactionService {
         return transactionRepository.totalsByCurrency(
                 TransactionSpecifications.matching(currentUser.id(), filter, categoryIds),
                 categoryIds, Boolean.TRUE.equals(filter.uncategorized()));
-    }
-
-    @Transactional
-    public BulkCategoryResponse updateCategory(BulkCategoryRequest request) {
-        Category category = request.categoryId() == null ? null : categoryService.find(request.categoryId());
-        int updated = 0;
-        int skippedTransfers = 0;
-        for (Long id : new LinkedHashSet<>(request.transactionIds())) {
-            Transaction transaction = find(id);
-            if (transaction.isTransfer()) {
-                skippedTransfers++;
-            } else {
-                // La nouvelle catégorie remplace une éventuelle ventilation
-                transaction.getSplits().clear();
-                transaction.setCategory(category);
-                updated++;
-            }
-        }
-        return new BulkCategoryResponse(updated, skippedTransfers);
     }
 
     private Set<Long> categoryIds(TransactionFilter filter) {

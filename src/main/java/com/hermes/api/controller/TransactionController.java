@@ -34,12 +34,6 @@ public class TransactionController {
         return ResponseEntity.ok(transactionService.totals(filter));
     }
 
-    // Catégorisation groupée ; les virements internes sont ignorés
-    @PatchMapping("/category")
-    public ResponseEntity<BulkCategoryResponse> updateCategory(@Valid @RequestBody BulkCategoryRequest request) {
-        return ResponseEntity.ok(transactionService.updateCategory(request));
-    }
-
     // Suppression groupée, tout ou rien ; un virement emporte son opération liée
     @PostMapping("/delete")
     public ResponseEntity<BulkDeleteResponse> deleteAll(@Valid @RequestBody BulkDeleteRequest request) {
