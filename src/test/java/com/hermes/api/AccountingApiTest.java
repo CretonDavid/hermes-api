@@ -271,6 +271,84 @@ class AccountingApiTest extends ApiTestSupport {
     }
 
     @Test
+    void recurringMonthlyTotalsAreConvertedToTheReferenceCurrency() throws Exception {
+        Session s = newUser();
+        long type = accountType(s, "Courant", false);
+        long eur = account(s, "Euros", type, eurId(s), "0");
+        long savings = account(s, "Livret", type, eurId(s), "0");
+        long usd = account(s, "Dollars", type, currencyId(s, "USD"), "0");
+        long gbp = account(s, "Livres", type, currencyId(s, "GBP"), "0");
+        String tomorrow = LocalDate.now().plusDays(1).toString();
+        mockMvc.perform(as(s, post("/exchange-rates")).content("{\"baseCurrencyId\":" + eurId(s) + ",\"quoteCurrencyId\":"
+                        + currencyId(s, "USD") + ",\"rate\":1.25,\"date\":\"" + LocalDate.now() + "\"}"))
+                .andExpect(status().isCreated());
+
+        String[] recurrences = {
+                "\"accountId\":" + eur + ",\"direction\":\"DEBIT\",\"amount\":100,\"frequency\":\"MONTHLY\",\"interval\":1",
+                "\"accountId\":" + usd + ",\"direction\":\"DEBIT\",\"amount\":125,\"frequency\":\"MONTHLY\",\"interval\":1",
+                // Remboursée à 75 % par des tiers, quel que soit leur rythme : seuls 10 € restent à charge
+                "\"accountId\":" + eur + ",\"direction\":\"DEBIT\",\"amount\":40,\"frequency\":\"MONTHLY\",\"interval\":1,"
+                        + "\"reimbursementPayers\":[{\"name\":\"Alex\",\"share\":50},"
+                        + "{\"name\":\"Sam\",\"share\":25,\"period\":\"QUARTERLY\"}]",
+                "\"accountId\":" + eur + ",\"direction\":\"CREDIT\",\"amount\":1200,\"frequency\":\"YEARLY\",\"interval\":1",
+                "\"accountId\":" + usd + ",\"direction\":\"CREDIT\",\"amount\":10,\"frequency\":\"WEEKLY\",\"interval\":2",
+                "\"accountId\":" + eur + ",\"targetAccountId\":" + savings + ",\"amount\":30,\"frequency\":\"MONTHLY\",\"interval\":1",
+                // Sans taux GBP : non comptée, devise signalée
+                "\"accountId\":" + gbp + ",\"direction\":\"DEBIT\",\"amount\":50,\"frequency\":\"MONTHLY\",\"interval\":1",
+        };
+        for (String r : recurrences) {
+            mockMvc.perform(as(s, post("/recurring-transactions"))
+                            .content("{" + r + ",\"label\":\"R\",\"startDate\":\"" + tomorrow + "\",\"active\":true}"))
+                    .andExpect(status().isCreated());
+        }
+        // Une récurrence inactive n'est pas comptée
+        mockMvc.perform(as(s, post("/recurring-transactions")).content("{\"accountId\":" + eur
+                        + ",\"direction\":\"DEBIT\",\"amount\":999,\"frequency\":\"MONTHLY\",\"interval\":1,\"label\":\"R\","
+                        + "\"startDate\":\"" + tomorrow + "\",\"active\":false}"))
+                .andExpect(status().isCreated());
+
+        // 100 € + 125 $ à 1,25 + 40 € à 25 % ; 1 200 €/an + 10 $ toutes les 2 semaines (10 × 365,25 / 84 / 2 × 0,8)
+        mockMvc.perform(as(s, get("/stats/recurring")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currencyCode").value("EUR"))
+                .andExpect(jsonPath("$.expenses").value(210.0))
+                .andExpect(jsonPath("$.income").value(117.39))
+                .andExpect(jsonPath("$.transfers").value(30.0))
+                .andExpect(jsonPath("$.missingRates[0]").value("GBP"));
+    }
+
+    @Test
+    void recurringMonthExpensesCountPastAndUpcomingOccurrencesOfTheCurrentMonth() throws Exception {
+        Session s = newUser();
+        long type = accountType(s, "Courant", false);
+        long eur = account(s, "Euros", type, eurId(s), "0");
+        long savings = account(s, "Livret", type, eurId(s), "0");
+        LocalDate monthStart = LocalDate.now().withDayOfMonth(1);
+        LocalDate monthEnd = monthStart.plusMonths(1).minusDays(1);
+
+        String[] recurrences = {
+                // Annuelle dont l'échéance tombe ce mois-ci : comptée en entier
+                "\"accountId\":" + eur + ",\"direction\":\"DEBIT\",\"amount\":1200,\"frequency\":\"YEARLY\",\"startDate\":\"" + monthStart + "\"",
+                // Hebdomadaire : échéances passées (générées) et à venir du mois
+                "\"accountId\":" + eur + ",\"direction\":\"DEBIT\",\"amount\":10,\"frequency\":\"WEEKLY\",\"startDate\":\"" + monthStart + "\"",
+                // Annuelle du mois prochain, revenu et virement : non comptés
+                "\"accountId\":" + eur + ",\"direction\":\"DEBIT\",\"amount\":500,\"frequency\":\"YEARLY\",\"startDate\":\"" + monthStart.plusMonths(1) + "\"",
+                "\"accountId\":" + eur + ",\"direction\":\"CREDIT\",\"amount\":2000,\"frequency\":\"MONTHLY\",\"startDate\":\"" + monthStart + "\"",
+                "\"accountId\":" + eur + ",\"targetAccountId\":" + savings + ",\"amount\":50,\"frequency\":\"MONTHLY\",\"startDate\":\"" + monthStart + "\"",
+        };
+        for (String r : recurrences) {
+            mockMvc.perform(as(s, post("/recurring-transactions"))
+                            .content("{" + r + ",\"interval\":1,\"label\":\"R\",\"active\":true}"))
+                    .andExpect(status().isCreated());
+        }
+
+        int weeks = (monthEnd.getDayOfMonth() - 1) / 7 + 1;
+        mockMvc.perform(as(s, get("/stats/recurring")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.monthExpenses").value(1200.0 + 10.0 * weeks));
+    }
+
+    @Test
     void recurringTransactionsGenerateDueOccurrences() throws Exception {
         Session s = newUser();
         long account = account(s, "Courant", accountType(s, "Courant", false), eurId(s), "0");

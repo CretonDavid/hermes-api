@@ -7,12 +7,16 @@ import com.hermes.api.dto.stats.SavingsStatsResponse.SavingsMonth;
 import com.hermes.api.exception.BadRequestException;
 import com.hermes.api.model.Account;
 import com.hermes.api.model.Category;
+import com.hermes.api.model.RecurringTransaction;
+import com.hermes.api.model.ReimbursementPayer;
 import com.hermes.api.model.Transaction;
 import com.hermes.api.model.User;
 import com.hermes.api.model.enums.CategoryType;
+import com.hermes.api.model.enums.RecurrenceFrequency;
 import com.hermes.api.model.enums.TransactionDirection;
 import com.hermes.api.repository.AccountRepository;
 import com.hermes.api.repository.CategoryRepository;
+import com.hermes.api.repository.RecurringTransactionRepository;
 import com.hermes.api.repository.TransactionRepository;
 import com.hermes.api.repository.UserRepository;
 import com.hermes.api.utils.CurrentUser;
@@ -49,6 +53,7 @@ public class StatsService {
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
     private final CategoryRepository categoryRepository;
+    private final RecurringTransactionRepository recurringRepository;
     private final UserRepository userRepository;
     private final ExchangeRateService exchangeRateService;
     private final CurrentUser currentUser;
@@ -320,6 +325,77 @@ public class StatsService {
                 .map(date -> new BalancePoint(date, round(totals.getOrDefault(date, BigDecimal.ZERO))))
                 .toList();
         return new BalanceHistoryResponse(ctx.currency(), ctx.rates().missingCurrencies(), total, series);
+    }
+
+    // ---------- Récurrences ----------
+
+    // Nombre moyen d'occurrences par mois pour un intervalle de 1 (année de 365,25 jours)
+    private static final Map<RecurrenceFrequency, BigDecimal> OCCURRENCES_PER_MONTH = Map.of(
+            RecurrenceFrequency.DAILY, new BigDecimal("30.4375"),
+            RecurrenceFrequency.WEEKLY, new BigDecimal("365.25").divide(new BigDecimal("84"), 16, RoundingMode.HALF_EVEN),
+            RecurrenceFrequency.MONTHLY, BigDecimal.ONE,
+            RecurrenceFrequency.YEARLY, BigDecimal.ONE.divide(new BigDecimal("12"), 16, RoundingMode.HALF_EVEN));
+
+    /** Équivalent mensuel des récurrences actives, converti au taux du jour. */
+    public RecurringMonthlyResponse recurringMonthly() {
+        Context ctx = context(List.of());
+        LocalDate today = LocalDate.now();
+        BigDecimal expenses = BigDecimal.ZERO;
+        BigDecimal income = BigDecimal.ZERO;
+        BigDecimal transfers = BigDecimal.ZERO;
+        LocalDate monthEnd = YearMonth.from(today).atEndOfMonth();
+
+        // Mois en cours : échéances déjà passées (montant réel de l'opération) puis échéances à venir
+        BigDecimal monthExpenses = BigDecimal.ZERO;
+        for (Transaction t : transactionRepository.findRecurringDebits(ctx.userId(), today.withDayOfMonth(1), monthEnd)) {
+            monthExpenses = monthExpenses.add(ctx.convert(t));
+        }
+
+        for (RecurringTransaction r : recurringRepository.findAllByOwner(ctx.userId())) {
+            if (!r.isActive() || r.getNextDate() == null) {
+                continue;
+            }
+            if (!r.isTransfer() && r.getDirection() == TransactionDirection.DEBIT) {
+                int dueThisMonth = occurrencesUntil(r, monthEnd);
+                monthExpenses = monthExpenses.add(
+                        ctx.convert(r.getAmount().multiply(BigDecimal.valueOf(dueThisMonth)), r.getAccount(), today));
+            }
+            BigDecimal monthly = r.getAmount()
+                    .multiply(OCCURRENCES_PER_MONTH.get(r.getFrequency()))
+                    .divide(BigDecimal.valueOf(r.getInterval()), 16, RoundingMode.HALF_EVEN);
+            BigDecimal converted = ctx.convert(monthly, r.getAccount(), today);
+            if (r.isTransfer()) {
+                transfers = transfers.add(converted);
+            } else if (r.getDirection() == TransactionDirection.DEBIT) {
+                expenses = expenses.add(converted.multiply(ownShare(r)));
+            } else {
+                income = income.add(converted);
+            }
+        }
+        return new RecurringMonthlyResponse(ctx.currency(), ctx.rates().missingCurrencies(),
+                round(monthExpenses), round(expenses), round(income), round(transfers));
+    }
+
+    // Part restant à la charge de l'utilisateur (entre 0 et 1), une fois déduites les parts des tiers
+    private static BigDecimal ownShare(RecurringTransaction r) {
+        BigDecimal payers = r.getReimbursementPayers().stream()
+                .map(ReimbursementPayer::getShare)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal own = BigDecimal.valueOf(100).subtract(payers).max(BigDecimal.ZERO);
+        return own.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_EVEN);
+    }
+
+    // Échéances pas encore générées d'une récurrence, de sa prochaine date jusqu'à limit inclus
+    private static int occurrencesUntil(RecurringTransaction r, LocalDate limit) {
+        int count = 0;
+        int index = r.getOccurrenceCount();
+        LocalDate date = r.getNextDate();
+        while (!date.isAfter(limit) && (r.getEndDate() == null || !date.isAfter(r.getEndDate()))) {
+            count++;
+            index++;
+            date = r.getFrequency().occurrence(r.getStartDate(), r.getInterval(), index);
+        }
+        return count;
     }
 
     // ---------- Epargne ----------

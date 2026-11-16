@@ -76,6 +76,11 @@ public class StatsController {
         return ResponseEntity.ok(statsService.balanceHistory(from, to, granularity, accountIds));
     }
 
+    @GetMapping("/recurring")
+    public ResponseEntity<RecurringMonthlyResponse> recurringMonthly() {
+        return ResponseEntity.ok(statsService.recurringMonthly());
+    }
+
     @GetMapping("/savings")
     public ResponseEntity<SavingsStatsResponse> savings(
             @RequestParam(required = false) LocalDate from,

@@ -75,6 +75,16 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             """)
     List<Transaction> findForStats(UUID ownerId, LocalDate from, LocalDate to);
 
+    // Dépenses générées par une récurrence sur une période (hors virements)
+    @Query("""
+            select t from Transaction t
+            join fetch t.account a join fetch a.currency
+            where a.owner.id = :ownerId and t.recurringTransaction is not null and t.transferPeer is null
+            and t.direction = com.hermes.api.model.enums.TransactionDirection.DEBIT
+            and t.operationDate between :from and :to
+            """)
+    List<Transaction> findRecurringDebits(UUID ownerId, LocalDate from, LocalDate to);
+
     @Query("select t.account.id as accountId, sum(" + SIGNED_AMOUNT + ") as total from Transaction t "
             + "where t.account.owner.id = :ownerId and t.operationDate < :before group by t.account.id")
     List<AccountSumView> sumByAccountBefore(UUID ownerId, LocalDate before);
