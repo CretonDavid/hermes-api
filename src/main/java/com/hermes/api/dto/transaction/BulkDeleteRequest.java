@@ -6,12 +6,11 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
- * Catégorie à appliquer à plusieurs opérations ; categoryId null les rend non catégorisées.
+ * Opérations à supprimer en une fois.
  */
-public record BulkCategoryRequest(
+public record BulkDeleteRequest(
         @NotEmpty(message = "Sélectionnez au moins une opération")
         @Size(max = 500, message = "500 opérations au maximum à la fois")
-        List<Long> transactionIds,
-        Long categoryId
+        List<Long> transactionIds
 ) {
 }

@@ -42,7 +42,7 @@ class AccountingApiTest extends ApiTestSupport {
         long type = accountType(s, "Courant", false);
         long current = account(s, "Courant", type, eurId(s), "0");
         long savings = account(s, "Livret", type, eurId(s), "0");
-        long small = transaction(s, current, "DEBIT", "10", "Zèbre", null, "2026-01-02");
+        transaction(s, current, "DEBIT", "10", "Zèbre", null, "2026-01-02");
         long big = transaction(s, current, "CREDIT", "200", "abricot", null, "2026-01-01");
         mockMvc.perform(as(s, post("/transfers")).content("{\"fromAccountId\":" + current + ",\"toAccountId\":" + savings
                 + ",\"amount\":50,\"operationDate\":\"2026-01-03\"}")).andExpect(status().isCreated());
@@ -61,19 +61,6 @@ class AccountingApiTest extends ApiTestSupport {
                 .andExpect(jsonPath("$[0].credits").value(200.0))
                 .andExpect(jsonPath("$[0].debits").value(60.0))
                 .andExpect(jsonPath("$[0].net").value(140.0));
-
-        Number transferId = read(mockMvc.perform(as(s, get("/transactions?kind=TRANSFER&accountIds=" + current))).andReturn(), "$.content[0].id");
-        long category = categoryId(s, "Courses");
-        mockMvc.perform(as(s, patch("/transactions/category"))
-                        .content("{\"transactionIds\":[" + small + "," + transferId + "],\"categoryId\":" + category + "}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.updated").value(1))
-                .andExpect(jsonPath("$.skippedTransfers").value(1));
-        mockMvc.perform(as(s, get("/transactions/" + small))).andExpect(jsonPath("$.category.id").value(category));
-
-        Session other = newUser();
-        mockMvc.perform(as(other, patch("/transactions/category")).content("{\"transactionIds\":[" + small + "]}"))
-                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -170,6 +157,42 @@ class AccountingApiTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.credit.amount").value(150));
 
         mockMvc.perform(as(s, delete("/transactions/" + debitId))).andExpect(status().isNoContent());
+        mockMvc.perform(as(s, get("/transactions?accountIds=" + savings))).andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @Test
+    void bulkDeleteIsAllOrNothingAndRemovesBothLegsOfTransfers() throws Exception {
+        Session s = newUser();
+        long checking = account(s, "Courant", accountType(s, "Courant", false), eurId(s), "100");
+        long savings = account(s, "Livret A", accountType(s, "Livret", true), eurId(s), "0");
+        long reconciled = transaction(s, checking, "DEBIT", "30", "Rapprochée", null, "2026-01-02");
+        long a = transaction(s, checking, "DEBIT", "20", "A", null, "2026-01-03");
+        long b = transaction(s, checking, "DEBIT", "5", "B", null, "2026-01-04");
+        MvcResult transfer = mockMvc.perform(as(s, post("/transfers")).content("{\"fromAccountId\":" + checking
+                        + ",\"toAccountId\":" + savings + ",\"amount\":10,\"operationDate\":\"2026-01-05\"}"))
+                .andExpect(status().isCreated()).andReturn();
+        MvcResult other = mockMvc.perform(as(s, post("/transfers")).content("{\"fromAccountId\":" + checking
+                        + ",\"toAccountId\":" + savings + ",\"amount\":15,\"operationDate\":\"2026-01-06\"}"))
+                .andExpect(status().isCreated()).andReturn();
+
+        mockMvc.perform(as(s, patch("/transactions/" + reconciled + "/status")).content("{\"status\":\"CLEARED\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(as(s, post("/accounts/" + checking + "/reconciliations"))
+                        .content("{\"statementDate\":\"2026-01-31\",\"statementBalance\":70}"))
+                .andExpect(status().isCreated());
+
+        // Une opération rapprochée dans la sélection : rien n'est supprimé
+        mockMvc.perform(as(s, post("/transactions/delete")).content("{\"transactionIds\":[" + a + "," + reconciled + "]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("rien n'a été supprimé")));
+        mockMvc.perform(as(s, get("/transactions/" + a))).andExpect(status().isOk());
+
+        // Les deux jambes d'un virement sélectionnées, et une seule jambe d'un autre : chacun est supprimé en entier
+        mockMvc.perform(as(s, post("/transactions/delete")).content("{\"transactionIds\":[" + a + "," + b + ","
+                        + read(transfer, "$.debit.id") + "," + read(transfer, "$.credit.id") + "," + read(other, "$.credit.id") + "]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deleted").value(6));
+        mockMvc.perform(as(s, get("/transactions?accountIds=" + checking))).andExpect(jsonPath("$.totalElements").value(1));
         mockMvc.perform(as(s, get("/transactions?accountIds=" + savings))).andExpect(jsonPath("$.totalElements").value(0));
     }
 

@@ -117,7 +117,7 @@ class TransactionSplitApiTest extends ApiTestSupport {
     }
 
     @Test
-    void deletingACategoryOrCategorizingInBulkKeepsSplitsConsistent() throws Exception {
+    void deletingACategoryKeepsSplitsConsistent() throws Exception {
         Session s = newUser();
         long account = account(s, "Courant", accountType(s, "Courant", false), eurId(s), "0");
         long groceries = categoryId(s, "Courses");
@@ -132,13 +132,6 @@ class TransactionSplitApiTest extends ApiTestSupport {
         mockMvc.perform(as(s, get("/transactions")).param("uncategorized", "true"))
                 .andExpect(jsonPath("$.content.length()").value(1))
                 .andExpect(jsonPath("$.content[0].matchedAmount").value(35.0));
-
-        mockMvc.perform(as(s, patch("/transactions/category"))
-                        .content("{\"transactionIds\":[" + id + "],\"categoryId\":" + restaurants + "}"))
-                .andExpect(status().isOk());
-        mockMvc.perform(as(s, get("/transactions/" + id)))
-                .andExpect(jsonPath("$.category.name").value("Restaurants"))
-                .andExpect(jsonPath("$.splits.length()").value(0));
 
         // Un compte bancaire avec des opérations ventilées se supprime
         split(s, account, "20", "2026-04-03", groceries, 1000, restaurants, 1000);
