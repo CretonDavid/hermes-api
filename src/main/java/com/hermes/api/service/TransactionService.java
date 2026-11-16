@@ -210,9 +210,11 @@ public class TransactionService {
     @Transactional(readOnly = true)
     public List<PayeeSuggestion> payees(String query, int limit) {
         UUID userId = currentUser.id();
-        String pattern = LikePatterns.containsIgnoreCase(query == null ? "" : query);
-        List<TransactionRepository.PayeeView> payees =
-                transactionRepository.findPayees(userId, pattern, PageRequest.of(0, Math.clamp(limit, 1, MAX_PAYEES)));
+        String text = query == null ? "" : query;
+        // Ce qui commence par la saisie d'abord, puis un mot qui commence par elle, puis le reste
+        List<TransactionRepository.PayeeView> payees = transactionRepository.findPayees(userId,
+                LikePatterns.containsIgnoreCase(text), LikePatterns.startsWithIgnoreCase(text),
+                LikePatterns.wordStartsWithIgnoreCase(text), PageRequest.of(0, Math.clamp(limit, 1, MAX_PAYEES)));
         if (payees.isEmpty()) {
             return List.of();
         }
@@ -231,9 +233,11 @@ public class TransactionService {
     @Transactional(readOnly = true)
     public List<LabelSuggestion> labels(String query, int limit) {
         UUID userId = currentUser.id();
-        String pattern = LikePatterns.containsIgnoreCase(query == null ? "" : query);
-        List<TransactionRepository.LabelView> labels =
-                transactionRepository.findLabels(userId, pattern, PageRequest.of(0, Math.clamp(limit, 1, MAX_PAYEES)));
+        String text = query == null ? "" : query;
+        // Même classement que pour les tiers
+        List<TransactionRepository.LabelView> labels = transactionRepository.findLabels(userId,
+                LikePatterns.containsIgnoreCase(text), LikePatterns.startsWithIgnoreCase(text),
+                LikePatterns.wordStartsWithIgnoreCase(text), PageRequest.of(0, Math.clamp(limit, 1, MAX_PAYEES)));
         if (labels.isEmpty()) {
             return List.of();
         }

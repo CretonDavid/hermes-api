@@ -17,10 +17,27 @@ public final class LikePatterns {
      * Motif « contient », en minuscules, pour une comparaison avec lower(colonne).
      */
     public static String containsIgnoreCase(String text) {
-        String escaped = text.trim().toLowerCase(Locale.ROOT)
+        return "%" + escape(text) + "%";
+    }
+
+    /**
+     * Motif « commence par », en minuscules.
+     */
+    public static String startsWithIgnoreCase(String text) {
+        return escape(text) + "%";
+    }
+
+    /**
+     * Motif « un mot (après une espace) commence par », en minuscules.
+     */
+    public static String wordStartsWithIgnoreCase(String text) {
+        return "% " + escape(text) + "%";
+    }
+
+    private static String escape(String text) {
+        return text.trim().toLowerCase(Locale.ROOT)
                 .replace("\\", "\\\\")
                 .replace("%", "\\%")
                 .replace("_", "\\_");
-        return "%" + escaped + "%";
     }
 }

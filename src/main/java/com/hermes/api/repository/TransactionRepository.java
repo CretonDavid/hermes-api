@@ -108,9 +108,12 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             select t.payee as payee, count(t) as usage from Transaction t
             where t.account.owner.id = :ownerId and t.payee is not null and t.transferPeer is null
               and lower(t.payee) like :pattern escape '\\'
-            group by t.payee order by count(t) desc
+            group by t.payee
+            order by case when lower(t.payee) like :prefix escape '\\' then 0
+                          when lower(t.payee) like :wordPrefix escape '\\' then 1 else 2 end,
+                     count(t) desc, t.payee
             """)
-    List<PayeeView> findPayees(UUID ownerId, String pattern, Pageable pageable);
+    List<PayeeView> findPayees(UUID ownerId, String pattern, String prefix, String wordPrefix, Pageable pageable);
 
     // Catégories utilisées pour ces tiers (en minuscules), les plus récentes d'abord
     @Query("""
@@ -139,9 +142,12 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             select t.label as label, count(t) as usage from Transaction t
             where t.account.owner.id = :ownerId and t.transferPeer is null
               and lower(t.label) like :pattern escape '\\'
-            group by t.label order by count(t) desc, t.label
+            group by t.label
+            order by case when lower(t.label) like :prefix escape '\\' then 0
+                          when lower(t.label) like :wordPrefix escape '\\' then 1 else 2 end,
+                     count(t) desc, t.label
             """)
-    List<LabelView> findLabels(UUID ownerId, String pattern, Pageable pageable);
+    List<LabelView> findLabels(UUID ownerId, String pattern, String prefix, String wordPrefix, Pageable pageable);
 
     // Tiers et catégorie des opérations portant ces libellés (en minuscules), les plus récentes d'abord
     @Query("""

@@ -142,6 +142,17 @@ class TransactionQueriesApiTest extends ApiTestSupport {
                 .andExpect(jsonPath("$[1].label").value("Cours de piano"))
                 .andExpect(jsonPath("$[1].lastPayee").value(nullValue()))
                 .andExpect(jsonPath("$[1].lastCategoryId").value(nullValue()));
+
+        // Début du libellé, puis début d'un mot, puis le reste, même plus fréquent
+        for (int i = 0; i < 3; i++) {
+            labelTransaction(s, account, "PRLV OVH CLOUD", null, null, "2026-01-1" + i);
+        }
+        labelTransaction(s, account, "Facture location", null, null, "2026-01-14");
+        labelTransaction(s, account, "Loyer", null, null, "2026-01-15");
+        mockMvc.perform(as(s, get("/transactions/labels")).param("q", "lo"))
+                .andExpect(jsonPath("$[0].label").value("Loyer"))
+                .andExpect(jsonPath("$[1].label").value("Facture location"))
+                .andExpect(jsonPath("$[2].label").value("PRLV OVH CLOUD"));
     }
 
     private void labelTransaction(Session s, long account, String label, String payee, Long category, String date)
