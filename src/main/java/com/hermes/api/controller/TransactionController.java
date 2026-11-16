@@ -47,6 +47,14 @@ public class TransactionController {
         return ResponseEntity.ok(transactionService.payees(q, limit));
     }
 
+    // Libellés déjà utilisés, les plus fréquents d'abord
+    @GetMapping("/labels")
+    public ResponseEntity<List<LabelSuggestion>> labels(
+            @RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "10") int limit) {
+        return ResponseEntity.ok(transactionService.labels(q, limit));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<TransactionResponse> getById(@PathVariable Long id) {
         return ResponseEntity.ok(transactionService.getById(id));

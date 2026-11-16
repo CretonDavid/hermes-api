@@ -228,6 +228,37 @@ public class TransactionService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<LabelSuggestion> labels(String query, int limit) {
+        UUID userId = currentUser.id();
+        String pattern = LikePatterns.containsIgnoreCase(query == null ? "" : query);
+        List<TransactionRepository.LabelView> labels =
+                transactionRepository.findLabels(userId, pattern, PageRequest.of(0, Math.clamp(limit, 1, MAX_PAYEES)));
+        if (labels.isEmpty()) {
+            return List.of();
+        }
+
+        // Dernier tiers et dernière catégorie renseignés pour chaque libellé
+        Set<String> keys = labels.stream().map(l -> l.getLabel().toLowerCase(Locale.ROOT)).collect(Collectors.toSet());
+        Map<String, String> lastPayee = new HashMap<>();
+        Map<String, Long> lastCategory = new HashMap<>();
+        for (TransactionRepository.LabelDetailsView row : transactionRepository.findDetailsOfLabels(userId, keys)) {
+            String key = row.getLabel().toLowerCase(Locale.ROOT);
+            if (row.getPayee() != null) {
+                lastPayee.putIfAbsent(key, row.getPayee());
+            }
+            if (row.getCategoryId() != null) {
+                lastCategory.putIfAbsent(key, row.getCategoryId());
+            }
+        }
+        return labels.stream()
+                .map(l -> {
+                    String key = l.getLabel().toLowerCase(Locale.ROOT);
+                    return new LabelSuggestion(l.getLabel(), l.getUsage(), lastPayee.get(key), lastCategory.get(key));
+                })
+                .toList();
+    }
+
     public Transaction find(Long id) {
         return transactionRepository.findByIdAndOwner(id, currentUser.id())
                 .orElseThrow(() -> new ResourceNotFoundException("Opération introuvable"));

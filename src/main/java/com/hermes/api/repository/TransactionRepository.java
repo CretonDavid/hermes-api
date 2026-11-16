@@ -121,6 +121,37 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             """)
     List<PayeeCategoryView> findCategoriesOfPayees(UUID ownerId, Collection<String> payees);
 
+    interface LabelView {
+        String getLabel();
+
+        Long getUsage();
+    }
+
+    interface LabelDetailsView {
+        String getLabel();
+
+        String getPayee();
+
+        Long getCategoryId();
+    }
+
+    @Query("""
+            select t.label as label, count(t) as usage from Transaction t
+            where t.account.owner.id = :ownerId and t.transferPeer is null
+              and lower(t.label) like :pattern escape '\\'
+            group by t.label order by count(t) desc, t.label
+            """)
+    List<LabelView> findLabels(UUID ownerId, String pattern, Pageable pageable);
+
+    // Tiers et catégorie des opérations portant ces libellés (en minuscules), les plus récentes d'abord
+    @Query("""
+            select t.label as label, t.payee as payee, c.id as categoryId from Transaction t
+            left join t.category c
+            where t.account.owner.id = :ownerId and t.transferPeer is null and lower(t.label) in :labels
+            order by t.operationDate desc, t.id desc
+            """)
+    List<LabelDetailsView> findDetailsOfLabels(UUID ownerId, Collection<String> labels);
+
     // Opérations catégorisées d'un utilisateur, les plus récentes d'abord (suggestions de catégorie)
     @Query("""
             select t from Transaction t join fetch t.category

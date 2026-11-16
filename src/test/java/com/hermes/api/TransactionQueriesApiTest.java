@@ -118,6 +118,41 @@ class TransactionQueriesApiTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
+    @Test
+    void labelSuggestionsCarryTheLastPayeeAndCategoryUsed() throws Exception {
+        Session s = newUser();
+        long account = account(s, "Courant", accountType(s, "Courant", false), eurId(s), "0");
+        long savings = account(s, "Livret", accountType(s, "Livret", true), eurId(s), "0");
+        long groceries = categoryId(s, "Courses");
+        labelTransaction(s, account, "Courses de la semaine", "Lidl", groceries, "2026-01-02");
+        labelTransaction(s, account, "Courses de la semaine", "Carrefour", null, "2026-01-09");
+        labelTransaction(s, account, "Cours de piano", null, null, "2026-01-05");
+        // Les virements ne sont pas proposés
+        mockMvc.perform(as(s, post("/transfers")).content("{\"fromAccountId\":" + account + ",\"toAccountId\":" + savings
+                        + ",\"amount\":10,\"label\":\"Courses mises de côté\",\"operationDate\":\"2026-01-06\"}"))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(as(s, get("/transactions/labels")).param("q", "cours"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].label").value("Courses de la semaine"))
+                .andExpect(jsonPath("$[0].usage").value(2))
+                .andExpect(jsonPath("$[0].lastPayee").value("Carrefour"))
+                .andExpect(jsonPath("$[0].lastCategoryId").value((int) groceries))
+                .andExpect(jsonPath("$[1].label").value("Cours de piano"))
+                .andExpect(jsonPath("$[1].lastPayee").value(nullValue()))
+                .andExpect(jsonPath("$[1].lastCategoryId").value(nullValue()));
+    }
+
+    private void labelTransaction(Session s, long account, String label, String payee, Long category, String date)
+            throws Exception {
+        mockMvc.perform(as(s, post("/transactions")).content("""
+                        {"accountId": %d, "direction": "DEBIT", "amount": 5, "label": "%s", "payee": %s,
+                         "categoryId": %s, "operationDate": "%s"}
+                        """.formatted(account, label, payee == null ? "null" : "\"" + payee + "\"", category, date)))
+                .andExpect(status().isCreated());
+    }
+
     private void payeeTransaction(Session s, long account, String payee, Long category, String date) throws Exception {
         mockMvc.perform(as(s, post("/transactions")).content("""
                         {"accountId": %d, "direction": "DEBIT", "amount": 5, "label": "Achat", "payee": "%s",
