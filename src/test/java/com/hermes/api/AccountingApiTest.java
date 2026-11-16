@@ -286,6 +286,10 @@ class AccountingApiTest extends ApiTestSupport {
         String[] recurrences = {
                 "\"accountId\":" + eur + ",\"direction\":\"DEBIT\",\"amount\":100,\"frequency\":\"MONTHLY\",\"interval\":1",
                 "\"accountId\":" + usd + ",\"direction\":\"DEBIT\",\"amount\":125,\"frequency\":\"MONTHLY\",\"interval\":1",
+                // Remboursée à 75 % par des tiers, quel que soit leur rythme : seuls 10 € restent à charge
+                "\"accountId\":" + eur + ",\"direction\":\"DEBIT\",\"amount\":40,\"frequency\":\"MONTHLY\",\"interval\":1,"
+                        + "\"reimbursementPayers\":[{\"name\":\"Alex\",\"share\":50},"
+                        + "{\"name\":\"Sam\",\"share\":25,\"period\":\"QUARTERLY\"}]",
                 "\"accountId\":" + eur + ",\"direction\":\"CREDIT\",\"amount\":1200,\"frequency\":\"YEARLY\",\"interval\":1",
                 "\"accountId\":" + usd + ",\"direction\":\"CREDIT\",\"amount\":10,\"frequency\":\"WEEKLY\",\"interval\":2",
                 "\"accountId\":" + eur + ",\"targetAccountId\":" + savings + ",\"amount\":30,\"frequency\":\"MONTHLY\",\"interval\":1",
@@ -303,11 +307,11 @@ class AccountingApiTest extends ApiTestSupport {
                         + "\"startDate\":\"" + tomorrow + "\",\"active\":false}"))
                 .andExpect(status().isCreated());
 
-        // 100 € + 125 $ à 1,25 ; 1 200 €/an + 10 $ toutes les 2 semaines (10 × 365,25 / 84 / 2 × 0,8)
+        // 100 € + 125 $ à 1,25 + 40 € à 25 % ; 1 200 €/an + 10 $ toutes les 2 semaines (10 × 365,25 / 84 / 2 × 0,8)
         mockMvc.perform(as(s, get("/stats/recurring")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.currencyCode").value("EUR"))
-                .andExpect(jsonPath("$.expenses").value(200.0))
+                .andExpect(jsonPath("$.expenses").value(210.0))
                 .andExpect(jsonPath("$.income").value(117.39))
                 .andExpect(jsonPath("$.transfers").value(30.0))
                 .andExpect(jsonPath("$.missingRates[0]").value("GBP"));

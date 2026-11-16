@@ -8,6 +8,7 @@ import com.hermes.api.exception.BadRequestException;
 import com.hermes.api.model.Account;
 import com.hermes.api.model.Category;
 import com.hermes.api.model.RecurringTransaction;
+import com.hermes.api.model.ReimbursementPayer;
 import com.hermes.api.model.Transaction;
 import com.hermes.api.model.User;
 import com.hermes.api.model.enums.CategoryType;
@@ -366,13 +367,22 @@ public class StatsService {
             if (r.isTransfer()) {
                 transfers = transfers.add(converted);
             } else if (r.getDirection() == TransactionDirection.DEBIT) {
-                expenses = expenses.add(converted);
+                expenses = expenses.add(converted.multiply(ownShare(r)));
             } else {
                 income = income.add(converted);
             }
         }
         return new RecurringMonthlyResponse(ctx.currency(), ctx.rates().missingCurrencies(),
                 round(monthExpenses), round(expenses), round(income), round(transfers));
+    }
+
+    // Part restant à la charge de l'utilisateur (entre 0 et 1), une fois déduites les parts des tiers
+    private static BigDecimal ownShare(RecurringTransaction r) {
+        BigDecimal payers = r.getReimbursementPayers().stream()
+                .map(ReimbursementPayer::getShare)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal own = BigDecimal.valueOf(100).subtract(payers).max(BigDecimal.ZERO);
+        return own.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_EVEN);
     }
 
     // Échéances pas encore générées d'une récurrence, de sa prochaine date jusqu'à limit inclus

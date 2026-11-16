@@ -8,7 +8,8 @@ import java.util.List;
  *
  * @param monthExpenses dépenses récurrentes du mois en cours : échéances déjà passées (montant réel)
  *                      et échéances à venir jusqu'à la fin du mois
- * @param expenses      coût mensuel moyen des dépenses récurrentes actives (une annuelle compte pour 1/12)
+ * @param expenses      coût mensuel moyen des dépenses récurrentes actives (une annuelle compte pour 1/12),
+ *                      part des tiers qui remboursent déduite
  * @param missingRates  devises sans taux de change : leurs montants ne sont pas comptés
  */
 public record RecurringMonthlyResponse(
